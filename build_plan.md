@@ -24,8 +24,8 @@ The MVP is complete when a developer can:
 
 ## Non-negotiables
 
-- [ ] Use 0G Router first, not Direct provider sub-accounts.
-- [ ] Use live 0G model catalog data; do not hardcode the model list as truth.
+- [x] Use 0G Router first, not Direct provider sub-accounts.
+- [x] Use live 0G model catalog data; do not hardcode the model list as truth.
 - [ ] Record real `x_0g_trace` metadata from Router responses.
 - [ ] Respect model capability flags before using JSON mode, tools, or vision.
 - [x] Keep API keys out of committed files.
@@ -114,16 +114,16 @@ Done when:
 
 Connect to real 0G Compute Router.
 
-- [ ] Add Router client configuration.
-- [ ] Support Router base URL.
-- [ ] Support inference API key from environment/config.
-- [ ] Implement `relay models`.
-- [ ] Parse live model catalog:
-  - [ ] model ID
-  - [ ] context length
-  - [ ] pricing
-  - [ ] provider count
-  - [ ] capabilities
+- [x] Add Router client configuration.
+- [x] Support Router base URL.
+- [x] Support inference API key from environment/config.
+- [x] Implement `relay models`.
+- [x] Parse live model catalog:
+  - [x] model ID
+  - [x] context length
+  - [x] pricing
+  - [x] provider count
+  - [x] capabilities
 - [ ] Implement one real chat completion call.
 - [ ] Capture `x_0g_trace` from the response.
 - [ ] Store token usage and billing data when returned.
@@ -131,7 +131,7 @@ Connect to real 0G Compute Router.
 
 Done when:
 
-- [ ] `relay models` returns live 0G model data.
+- [x] `relay models` returns live 0G model data.
 - [ ] `relay ask --model <model-id> "hello"` gets a real response.
 - [ ] The response event includes model trace metadata.
 - [ ] The local event record can be inspected after the call.
