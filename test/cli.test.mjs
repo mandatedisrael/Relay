@@ -92,6 +92,67 @@ describe("Relay CLI", () => {
     assert.equal(stderr, "");
   });
 
+  it("lists models allowed for the configured API key", async () => {
+    const harness = createIo({
+      OG_INFERENCE_API_KEY: "sk-test"
+    }, process.cwd(), async (url, options) => {
+      if (String(url).endsWith("/models")) {
+        return {
+          ok: true,
+          async json() {
+            return {
+              object: "list",
+              data: [
+                {
+                  id: "example/allowed",
+                  context_length: 131072,
+                  provider_count: 1,
+                  pricing: { prompt: "100", completion: "200" },
+                  capabilities: { chat: true, tools: false, vision: false, json_mode: false }
+                },
+                {
+                  id: "example/denied",
+                  context_length: 131072,
+                  provider_count: 1,
+                  pricing: { prompt: "50", completion: "100" },
+                  capabilities: { chat: true, tools: false, vision: false, json_mode: false }
+                }
+              ]
+            };
+          }
+        };
+      }
+
+      const body = JSON.parse(options.body);
+      if (body.model === "example/denied") {
+        return {
+          ok: false,
+          async json() {
+            return { error: { message: "model not allowed for this api key: example/denied" } };
+          }
+        };
+      }
+
+      return {
+        ok: true,
+        async json() {
+          return {
+            choices: [{ message: { content: "ok" } }],
+            usage: { prompt_tokens: 1, completion_tokens: 1 }
+          };
+        }
+      };
+    });
+
+    await runCli(["models", "--allowed"], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /Allowed for your API key: 1 of 2 chat models/);
+    assert.match(stdout, /example\/allowed \| allowed/);
+    assert.match(stdout, /example\/denied \| not allowed for API key/);
+    assert.equal(stderr, "");
+  });
+
   it("fails clearly when ask is missing an inference key", async () => {
     const harness = createIo();
 
@@ -285,7 +346,8 @@ describe("Relay CLI", () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
     const rootHash = `0x${"f".repeat(64)}`;
     const harness = createIo({
-      OG_STORAGE_PRIVATE_KEY: "0x" + "2".repeat(64)
+      OG_STORAGE_PRIVATE_KEY: "0x" + "2".repeat(64),
+      OG_STORAGE_NETWORK: "testnet"
     }, projectRoot);
     harness.io.storageDeps = {
       uploadEncryptedBytes: async () => ({

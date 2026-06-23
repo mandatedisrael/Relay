@@ -13,6 +13,7 @@ import {
   saveEvent,
   saveView
 } from "./local-store.mjs";
+import { formatModelAccessReason, probeModelAccess } from "./model-access.mjs";
 import { createChatCompletion, fetchModelCatalog } from "./zerog-router.mjs";
 import { createInitialCapsule } from "./capsule-compiler.mjs";
 import { buildContextView } from "./view-builder.mjs";
@@ -29,7 +30,7 @@ Usage:
   relay --help
   relay init
   relay doctor
-  relay models
+  relay models [--allowed] [--json]
   relay ask --model <model-id> [--goal "task description"] "message"
   relay capsule list
   relay capsule inspect [capsule-id]
@@ -44,7 +45,7 @@ Commands:
   init       Create local Relay runtime folders.
   doctor     Check local setup. Use --live for 0G connectivity checks.
   proof      Run the full live MVP proof loop and save a report.
-  models     List live 0G Router models.
+  models     List live 0G Router models. Use --allowed to probe your API key access.
   ask        Send one chat completion through 0G Router. Supports --goal for capsule.
   switch     Continue a task on another 0G model using a capsule view handoff.
   capsule    Inspect, publish, fetch, and build views from local Context Capsules.
@@ -76,24 +77,7 @@ export async function runCli(args, io) {
   }
 
   if (command === "models") {
-    const config = loadConfig(io.env);
-    const models = await fetchModelCatalog({ baseUrl: config.routerBaseUrl, fetchImpl: io.fetch });
-    io.stdout.write(`0G Router models (${models.length})\n`);
-
-    for (const model of models) {
-      const context = model.contextLength === null ? "unknown ctx" : `${model.contextLength} ctx`;
-      const providers = model.providerCount === null ? "providers unknown" : `${model.providerCount} providers`;
-      const prompt = model.pricing.prompt ?? "unknown";
-      const completion = model.pricing.completion ?? "unknown";
-      const capabilities = [
-        model.capabilities.chat ? "chat" : null,
-        model.capabilities.tools ? "tools" : null,
-        model.capabilities.vision ? "vision" : null,
-        model.capabilities.json ? "json" : null
-      ].filter(Boolean).join(", ") || "capabilities unknown";
-
-      io.stdout.write(`${model.id} | ${context} | ${providers} | prompt ${prompt} | completion ${completion} | ${capabilities}\n`);
-    }
+    await runModelsCommand(args.slice(1), io);
     return;
   }
 
@@ -123,6 +107,75 @@ export async function runCli(args, io) {
   io.stderr.write(HELP_TEXT);
   io.stderr.write("\n");
   throw new Error("Command failed.");
+}
+
+async function runModelsCommand(args, io) {
+  const allowedFlag = args.includes("--allowed");
+  const jsonFlag = args.includes("--json");
+  const config = loadConfig(io.env);
+  const models = await fetchModelCatalog({ baseUrl: config.routerBaseUrl, fetchImpl: io.fetch });
+
+  if (!allowedFlag) {
+    io.stdout.write(`0G Router models (${models.length})\n`);
+    for (const model of models) {
+      io.stdout.write(`${formatModelCatalogLine(model)}\n`);
+    }
+    return;
+  }
+
+  if (!config.hasInferenceKey) {
+    throw new Error("OG_INFERENCE_API_KEY is required for `relay models --allowed`.");
+  }
+
+  const access = await probeModelAccess({
+    baseUrl: config.routerBaseUrl,
+    apiKey: config.inferenceApiKey,
+    models,
+    fetchImpl: io.fetch
+  });
+
+  if (jsonFlag) {
+    io.stdout.write(`${JSON.stringify({
+      catalog_count: models.length,
+      probed_count: access.summary.total,
+      allowed_count: access.summary.allowedCount,
+      denied_count: access.summary.deniedCount,
+      results: access.results.map((result) => ({
+        id: result.model.id,
+        allowed: result.allowed,
+        reason: result.reason,
+        context_length: result.model.contextLength,
+        provider_count: result.model.providerCount,
+        pricing: result.model.pricing,
+        capabilities: result.model.capabilities
+      }))
+    }, null, 2)}\n`);
+    return;
+  }
+
+  io.stdout.write(`0G Router models (${models.length})\n`);
+  io.stdout.write(`Allowed for your API key: ${access.summary.allowedCount} of ${access.summary.total} chat models\n`);
+
+  for (const result of access.results) {
+    const status = result.allowed ? "allowed" : formatModelAccessReason(result.reason);
+    io.stdout.write(`${result.model.id} | ${status} | ${formatModelCatalogLine(result.model, { includeId: false })}\n`);
+  }
+}
+
+function formatModelCatalogLine(model, { includeId = true } = {}) {
+  const context = model.contextLength === null ? "unknown ctx" : `${model.contextLength} ctx`;
+  const providers = model.providerCount === null ? "providers unknown" : `${model.providerCount} providers`;
+  const prompt = model.pricing.prompt ?? "unknown";
+  const completion = model.pricing.completion ?? "unknown";
+  const capabilities = [
+    model.capabilities.chat ? "chat" : null,
+    model.capabilities.tools ? "tools" : null,
+    model.capabilities.vision ? "vision" : null,
+    model.capabilities.json ? "json" : null
+  ].filter(Boolean).join(", ") || "capabilities unknown";
+
+  const details = `${context} | ${providers} | prompt ${prompt} | completion ${completion} | ${capabilities}`;
+  return includeId ? `${model.id} | ${details}` : details;
 }
 
 async function runDoctorCommand(args, io) {

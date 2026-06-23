@@ -1,6 +1,7 @@
 import { ethers } from "ethers";
 import { loadConfig } from "./config.mjs";
 import { loadStorageConfig } from "./storage-config.mjs";
+import { probeModelAccess } from "./model-access.mjs";
 import { fetchModelCatalog } from "./zerog-router.mjs";
 
 export async function runLiveDoctorChecks({ env, fetchImpl = globalThis.fetch }) {
@@ -38,6 +39,40 @@ export async function runLiveDoctorChecks({ env, fetchImpl = globalThis.fetch })
     });
   }
 
+  let allowedModels = [];
+  if (router.hasInferenceKey && models.length > 0) {
+    try {
+      const access = await probeModelAccess({
+        baseUrl: router.routerBaseUrl,
+        apiKey: router.inferenceApiKey,
+        models,
+        fetchImpl
+      });
+      allowedModels = access.summary.allowedModels;
+      checks.push({
+        name: "router_allowed_models",
+        ok: access.summary.allowedCount > 0,
+        detail: access.summary.allowedCount > 0
+          ? `${access.summary.allowedCount} of ${access.summary.total} chat models allowed for this API key`
+          : `0 of ${access.summary.total} chat models allowed for this API key`
+      });
+    } catch (error) {
+      checks.push({
+        name: "router_allowed_models",
+        ok: false,
+        detail: error.message
+      });
+    }
+  } else {
+    checks.push({
+      name: "router_allowed_models",
+      ok: false,
+      detail: router.hasInferenceKey
+        ? "skipped until router catalog loads"
+        : "skipped until OG_INFERENCE_API_KEY is configured"
+    });
+  }
+
   if (storage.ok && storage.config.hasPrivateKey) {
     try {
       const provider = new ethers.JsonRpcProvider(storage.config.evmRpcUrl);
@@ -68,6 +103,7 @@ export async function runLiveDoctorChecks({ env, fetchImpl = globalThis.fetch })
     router,
     storage: storage.ok ? storage.config : null,
     models,
+    allowedModels,
     checks,
     readyForProof: checks.every((check) => check.ok)
   };

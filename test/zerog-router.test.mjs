@@ -130,6 +130,27 @@ describe("0G Router model catalog", () => {
     assert.equal(completion.trace.billing.totalCost, "300");
   });
 
+  it("supports max_tokens for low-cost probe requests", async () => {
+    await createChatCompletion({
+      baseUrl: "https://router-api.0g.ai/v1",
+      apiKey: "sk-test",
+      model: "example/model",
+      messages: [{ role: "user", content: "ok" }],
+      maxTokens: 1,
+      fetchImpl: async (_url, options) => {
+        const body = JSON.parse(options.body);
+        assert.equal(body.max_tokens, 1);
+
+        return {
+          ok: true,
+          async json() {
+            return chatCompletionBody();
+          }
+        };
+      }
+    });
+  });
+
   it("parses Router chat completion trace metadata", () => {
     assert.deepEqual(parseChatCompletion(chatCompletionBody()), {
       id: "chatcmpl_001",

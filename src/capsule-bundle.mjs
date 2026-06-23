@@ -52,8 +52,24 @@ export function serializeCapsuleBundle(bundle) {
   return Buffer.from(canonicalJson(bundle), "utf8");
 }
 
+function decodeBundleBytes(bytes) {
+  if (typeof bytes === "string") {
+    return bytes;
+  }
+
+  if (Buffer.isBuffer(bytes)) {
+    return bytes.toString("utf8");
+  }
+
+  if (bytes instanceof Uint8Array || ArrayBuffer.isView(bytes)) {
+    return Buffer.from(bytes).toString("utf8");
+  }
+
+  return String(bytes);
+}
+
 export function parseCapsuleBundle(bytes) {
-  const text = Buffer.isBuffer(bytes) ? bytes.toString("utf8") : String(bytes);
+  const text = decodeBundleBytes(bytes);
   const bundle = JSON.parse(text);
 
   if (bundle?.schema !== "relay.capsule-bundle.v1") {

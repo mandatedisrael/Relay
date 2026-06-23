@@ -24,7 +24,8 @@ export async function createChatCompletion({
   model,
   messages,
   fetchImpl = globalThis.fetch,
-  verifyTee = false
+  verifyTee = false,
+  maxTokens
 } = {}) {
   if (!baseUrl) {
     throw new Error("0G Router base URL is required.");
@@ -52,7 +53,8 @@ export async function createChatCompletion({
     body: JSON.stringify({
       model,
       messages,
-      verify_tee: verifyTee
+      verify_tee: verifyTee,
+      ...(Number.isInteger(maxTokens) && maxTokens > 0 ? { max_tokens: maxTokens } : {})
     })
   });
 

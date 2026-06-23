@@ -78,7 +78,8 @@ export async function runMvpProof({
   const models = doctor.models.length > 0
     ? doctor.models
     : await fetchModelCatalog({ baseUrl: doctor.router.routerBaseUrl, fetchImpl });
-  const selected = selectProofModels(models, { modelA, modelB });
+  const allowedModelIds = doctor.allowedModels?.map((model) => model.id) ?? null;
+  const selected = selectProofModels(models, { modelA, modelB, allowedModelIds });
   report.models = selected;
   recordStep(report, "model_selection", true, selected);
 
@@ -224,13 +225,21 @@ export async function saveProofReport(projectRoot, report) {
   return path;
 }
 
-export function selectProofModels(models, { modelA, modelB } = {}) {
+export function selectProofModels(models, { modelA, modelB, allowedModelIds = null } = {}) {
+  const allowed = Array.isArray(allowedModelIds) && allowedModelIds.length > 0
+    ? new Set(allowedModelIds)
+    : null;
+
   const eligible = models
     .filter((model) => model.capabilities.chat)
+    .filter((model) => !allowed || allowed.has(model.id))
     .sort((left, right) => comparePromptPrice(left, right));
 
   if (eligible.length < 2 && (!modelA || !modelB)) {
-    throw new Error("Need at least two chat-capable 0G Router models for relay proof.");
+    const hint = allowed
+      ? " Need at least two chat-capable models allowed for this API key. Run `relay models --allowed`."
+      : "";
+    throw new Error(`Need at least two chat-capable 0G Router models for relay proof.${hint}`);
   }
 
   const resolvedA = modelA ?? eligible[0]?.id;

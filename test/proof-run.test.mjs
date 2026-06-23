@@ -16,6 +16,21 @@ describe("Relay MVP proof run", () => {
     assert.equal(selected.modelB, "zai/a");
   });
 
+  it("prefers models allowed for the configured API key", () => {
+    const models = [
+      { id: "zai/cheap-denied", capabilities: { chat: true }, pricing: { prompt: "1" } },
+      { id: "zai/allowed-a", capabilities: { chat: true }, pricing: { prompt: "100" } },
+      { id: "zai/allowed-b", capabilities: { chat: true }, pricing: { prompt: "200" } }
+    ];
+
+    const selected = selectProofModels(models, {
+      allowedModelIds: ["zai/allowed-a", "zai/allowed-b"]
+    });
+
+    assert.equal(selected.modelA, "zai/allowed-a");
+    assert.equal(selected.modelB, "zai/allowed-b");
+  });
+
   it("runs storage-skipped proof with mocked router calls", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-proof-test-"));
     let callCount = 0;

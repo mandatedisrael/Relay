@@ -69,4 +69,19 @@ describe("Relay capsule bundle", () => {
     assert.equal(validation.ok, false);
     assert.match(validation.errors.join(" "), /content_hash does not match/);
   });
+
+  it("parses bundles returned as Uint8Array downloads", async () => {
+    const capsule = await readFixture("protocol/fixtures/valid-capsule.json");
+    const bundle = buildCapsuleBundle({
+      capsule,
+      events: [],
+      traces: [],
+      handoff: "handoff"
+    });
+
+    const bytes = serializeCapsuleBundle(bundle);
+    const parsed = parseCapsuleBundle(new Uint8Array(bytes));
+    assert.equal(parsed.schema, "relay.capsule-bundle.v1");
+    assert.equal(parsed.capsule.capsule_id, capsule.capsule_id);
+  });
 });
