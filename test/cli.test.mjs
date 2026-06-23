@@ -130,7 +130,7 @@ describe("Relay CLI", () => {
       }
     }));
 
-    await runCli(["ask", "--model", "example/model", "hello"], harness.io);
+    await runCli(["ask", "--model", "example/model", "--goal", "Test goal via flag", "hello"], harness.io);
 
     const { stdout, stderr } = harness.output();
     assert.match(stdout, /hello from 0G/);
