@@ -67,9 +67,9 @@ describe("Relay onboarding", () => {
 
     assert.equal(result.skipped, false);
     assert.match(stdout, /Welcome to Relay/);
-    assert.match(stdout, /Locked in\./);
+    assert.match(stdout, /✓ Locked in\./);
     assert.match(stdout, /Storage skipped/);
-    assert.match(stdout, /Ready\. Opening Relay/);
+    assert.match(stdout, /✓ Ready\. Opening Relay/);
 
     const envText = await readFile(envFilePath(projectRoot), "utf8");
     assert.match(envText, /OG_INFERENCE_API_KEY=sk-test-key/);

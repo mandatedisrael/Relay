@@ -486,7 +486,7 @@ async function runProxyCommand(args, io) {
   });
 
   const listenUrl = await proxy.start();
-  io.stdout.write(`Relay proxy listening on ${listenUrl}/v1\n`);
+  io.stdout.write(`✓ Relay proxy listening on ${listenUrl}/v1\n`);
   io.stdout.write(`Project memory: ${join(projectRoot, ".relay")}\n`);
   io.stdout.write(`Upstream Router: ${proxy.upstreamBaseUrl}\n`);
   io.stdout.write("Client-agnostic: Claude Code, Codex, OpenCode, Cline, Aider, Continue, Cursor, Grok Build CLI, etc.\n");

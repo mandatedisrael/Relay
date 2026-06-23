@@ -282,7 +282,7 @@ describe("Relay CLI", () => {
     const { stdout } = harness.output();
     assert.match(stdout, /Welcome to Relay/);
     assert.match(stdout, /one shared memory/i);
-    assert.match(stdout, /Ready\. Opening Relay/);
+    assert.match(stdout, /✓ Ready\. Opening Relay/);
     assert.match(stdout, /What are we working on/);
   });
 

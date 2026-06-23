@@ -177,7 +177,7 @@ export async function runInteractiveSession(launch, io) {
   await resolveSessionModel(state, { projectRoot, config, io, resume: launch.resume });
 
   if (launch.quietStart) {
-    io.stdout.write("relay>  What are we working on?\n\n");
+    io.stdout.write("relay>  What are we working on? 👋\n\n");
   } else {
     writeSessionBanner(io, state, projectRoot);
   }
@@ -341,7 +341,7 @@ async function runModelHandoff({ projectRoot, config, io, state, argument }) {
   const previousModel = state.model;
   state.model = modelId;
 
-  io.stdout.write(`\nHanding off to ${state.model} (${state.mode} capsule view)`);
+  io.stdout.write(`\n⇄ Handing off to ${state.model} (${state.mode} capsule view)`);
   if (previousModel && previousModel !== state.model) {
     io.stdout.write(` from ${previousModel}`);
   }
@@ -460,7 +460,7 @@ async function resolveSessionModel(state, { projectRoot, config, io, resume }) {
 }
 
 function writeSessionBanner(io, state, projectRoot) {
-  io.stdout.write("\nRelay interactive session\n");
+  io.stdout.write("\nRelay interactive session ⚡\n");
   io.stdout.write("Shared task memory for 0G models. Type /help for commands, /quit to exit.\n");
   io.stdout.write("Switch models in-session: /to <model-id>\n");
   io.stdout.write(`Project: ${projectRoot}\n`);
@@ -549,7 +549,7 @@ async function publishActiveCapsule({ projectRoot, io, state }) {
   await saveCapsule(projectRoot, result.updatedCapsule);
   await saveView(projectRoot, result.view);
 
-  io.stdout.write("\nPublished encrypted Context Capsule to 0G Storage.\n");
+  io.stdout.write("\n✓ Published encrypted Context Capsule to 0G Storage.\n");
   io.stdout.write(`Relay URL: ${result.relayUrl}\n`);
   io.stdout.write(`Decryption key: ${result.keyHex}\n`);
 }

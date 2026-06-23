@@ -4,14 +4,14 @@ import { join } from "node:path";
 import { DEFAULT_ROUTER_BASE_URL } from "./config.mjs";
 
 export const WELCOME_BANNER = `
-Welcome to Relay
+Welcome to Relay ⚡
 
 0G has the models. Relay gives them one shared memory.
 
 One task state across every model and CLI layer — compact handoffs,
 better token efficiency, and no transcript replay when you switch.
 
-Your keys stay on this machine (.env). Relay never uploads them.
+🔒 Your keys stay on this machine (.env). Relay never uploads them.
 
 Let's wire up your Router key and get you building.
 `.trim();
@@ -35,8 +35,8 @@ export async function runOnboardingWizard(projectRoot, io) {
     io.stdout.write("\n");
   }
 
-  const inferenceKey = await promptRequiredMasked(io, "Router inference key (hidden while you type):\n› ");
-  io.stdout.write("\nLocked in.\n\n");
+  const inferenceKey = await promptRequiredMasked(io, "🔑 Router inference key (hidden while you type):\n› ");
+  io.stdout.write("\n✓ Locked in.\n\n");
 
   const storageKey = await promptOptionalMasked(
     io,
@@ -44,9 +44,9 @@ export async function runOnboardingWizard(projectRoot, io) {
   );
 
   if (storageKey) {
-    io.stdout.write("\nStorage configured.\n");
+    io.stdout.write("\n✓ Storage configured.\n");
   } else {
-    io.stdout.write("\nStorage skipped — add OG_STORAGE_PRIVATE_KEY to .env anytime.\n");
+    io.stdout.write("\n○ Storage skipped — add OG_STORAGE_PRIVATE_KEY to .env anytime.\n");
   }
 
   await writeProjectEnv(projectRoot, {
@@ -54,7 +54,7 @@ export async function runOnboardingWizard(projectRoot, io) {
     OG_STORAGE_PRIVATE_KEY: storageKey ?? ""
   });
 
-  io.stdout.write("\nReady. Opening Relay…\n\n");
+  io.stdout.write("\n✓ Ready. Opening Relay…\n\n");
 
   return {
     skipped: false,

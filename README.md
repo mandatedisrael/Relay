@@ -6,7 +6,7 @@ Relay is shared working memory for 0G models.
 
 The short version:
 
-> 0G has many models. Relay gives them shared context.
+> 0G has many models. Relay gives them shared context. ⚡
 
 Relay passes **task state**, not chat history. That memory is a **Context Capsule**: goal, verified facts, unverified claims, next action, model traces, and billing metadata.
 
