@@ -176,7 +176,7 @@ Turn model interactions into structured task memory.
 - [x] Validate compiler output against schema.
 - [ ] Add repair or retry path for invalid JSON.
 - [x] Keep unsupported model statements as `claimed`, not `verified` (initial compiler uses "observed").
-- [ ] Add capsule update flow after each model step.
+- [x] Add capsule update flow after each model step.
 
 Done when:
 
@@ -213,20 +213,20 @@ Done when:
 Prove the core product loop.
 
 - [ ] Implement `relay run "<task>" --auto --mode standard`.
-- [ ] Implement `relay switch --to <model-id> --mode <mode>`.
-- [ ] Build continuation prompt contract.
-- [ ] Send capsule view to target model.
-- [ ] Capture target model response as a new event.
-- [ ] Update the capsule after the second model responds.
-- [ ] Add transcript-independent continuation test using a real 0G call.
+- [x] Implement `relay switch --to <model-id> --mode <mode>`.
+- [x] Build continuation prompt contract.
+- [x] Send capsule view to target model.
+- [x] Capture target model response as a new event.
+- [x] Update the capsule after the second model responds.
+- [x] Add transcript-independent continuation test using a real 0G call.
 
 Done when:
 
-- [ ] Model A performs a first task step.
-- [ ] Relay creates and validates a capsule.
-- [ ] Model B continues from a capsule view.
-- [ ] Model B is not given the full prior transcript.
-- [ ] Relay records token/cost difference between full history and capsule handoff.
+- [x] Model A performs a first task step.
+- [x] Relay creates and validates a capsule.
+- [x] Model B continues from a capsule view.
+- [x] Model B is not given the full prior transcript.
+- [x] Relay records token/cost difference between full history and capsule handoff.
 
 ## Phase 9: 0G Storage publishing
 
@@ -345,8 +345,9 @@ Use this section to record completed milestones as the build advances.
 - [ ] Phase 6 complete:
 - Phase 4 progress: real ask + x_0g_trace capture + event recording complete.
 - Phase 6 progress: basic event-to-initial-capsule compiler implemented and wired to ask (produces valid capsules with observed facts + traces).
+- Phase 6 progress: capsule update flow after each model step is implemented and tested.
 - [x] Phase 7 complete: compact/standard/deep views, token estimates, reduction preview, and `relay capsule view`.
-- [ ] Phase 8 complete:
+- [x] Phase 8 complete: `relay switch`, continuation prompt contract, transcript-independent handoff, capsule updates, and token savings reporting.
 - [ ] Phase 9 complete:
 - [ ] Phase 10 complete:
 - [ ] Phase 11 complete:

@@ -13,6 +13,7 @@ import {
 import { createChatCompletion, fetchModelCatalog } from "./zerog-router.mjs";
 import { createInitialCapsule } from "./capsule-compiler.mjs";
 import { buildContextView } from "./view-builder.mjs";
+import { runModelSwitch } from "./model-switch.mjs";
 import { CONTEXT_MODES } from "./protocol.mjs";
 
 const HELP_TEXT = `Relay
@@ -28,17 +29,17 @@ Usage:
   relay capsule list
   relay capsule inspect [capsule-id]
   relay capsule view --mode <compact|standard|deep> [capsule-id]
+  relay switch --to <model-id> --mode <compact|standard|deep> [--message "..."] [capsule-id]
 
 Commands:
   init       Create local Relay runtime folders.
   doctor     Check local setup without requiring secrets.
   models     List live 0G Router models.
   ask        Send one chat completion through 0G Router. Supports --goal for capsule.
+  switch     Continue a task on another 0G model using a capsule view handoff.
   capsule    Inspect, list, and build context views from local Context Capsules.
 
 MVP commands coming next:
-  relay models
-  relay ask --model <model-id> "hello"
   relay run "<task>" --auto --mode standard
 `;
 
@@ -100,6 +101,11 @@ export async function runCli(args, io) {
 
   if (command === "capsule") {
     await runCapsuleCommand(args.slice(1), io);
+    return;
+  }
+
+  if (command === "switch") {
+    await runSwitchCommand(args.slice(1), io);
     return;
   }
 
@@ -202,6 +208,89 @@ async function runCapsuleCommand(args, io) {
 
   io.stderr.write(`Unknown capsule command: ${subcommand}\n`);
   throw new Error("Command failed.");
+}
+
+async function runSwitchCommand(args, io) {
+  const toIndex = args.indexOf("--to");
+  const modeIndex = args.indexOf("--mode");
+  const messageIndex = args.indexOf("--message");
+  const targetModel = toIndex === -1 ? "" : args[toIndex + 1];
+  const mode = modeIndex === -1 ? "" : args[modeIndex + 1];
+  const instruction = messageIndex === -1 ? null : args[messageIndex + 1];
+  const filtered = args.filter((_, index) =>
+    index !== toIndex && index !== toIndex + 1 &&
+    index !== modeIndex && index !== modeIndex + 1 &&
+    index !== messageIndex && index !== messageIndex + 1
+  );
+  const capsuleId = parseOptionalCapsuleId(filtered);
+  const projectRoot = io.cwd ?? process.cwd();
+  const config = loadConfig(io.env);
+
+  if (!targetModel) {
+    throw new Error("--to is required with a target 0G model ID.");
+  }
+
+  if (!mode) {
+    throw new Error(`--mode is required. Choose one of: ${CONTEXT_MODES.join(", ")}.`);
+  }
+
+  if (!CONTEXT_MODES.includes(mode)) {
+    throw new Error(`Invalid context mode "${mode}". Choose one of: ${CONTEXT_MODES.join(", ")}.`);
+  }
+
+  const record = await readCapsule(projectRoot, capsuleId);
+  if (!record) {
+    io.stdout.write("No local Context Capsules found. Run relay ask first to create one.\n");
+    return;
+  }
+
+  const events = await loadEventPayloads(projectRoot);
+  const result = await runModelSwitch({
+    capsule: record.payload,
+    mode,
+    events,
+    model: targetModel,
+    instruction,
+    baseUrl: config.routerBaseUrl,
+    apiKey: config.inferenceApiKey,
+    fetchImpl: io.fetch
+  });
+
+  const eventRecord = await saveEvent(projectRoot, result.event);
+  const viewRecord = await saveView(projectRoot, result.view);
+  const capsuleRecord = await saveCapsule(projectRoot, result.updatedCapsule);
+
+  io.stdout.write(`${result.completion.content}\n`);
+  io.stdout.write(`\nSwitched to: ${targetModel}\n`);
+  io.stdout.write(`Context mode: ${mode}\n`);
+  io.stdout.write(`Estimated handoff: ${formatTokenCount(result.estimates.viewTokens)} tokens\n`);
+  io.stdout.write(`Full event history: ${formatTokenCount(result.estimates.fullHistoryTokens)} tokens\n`);
+
+  if (result.estimates.reductionPercent === null) {
+    io.stdout.write("Estimated context reduction: unavailable\n");
+  } else {
+    io.stdout.write(`Estimated context reduction: ${result.estimates.reductionPercent}%\n`);
+  }
+
+  io.stdout.write("Transcript-independent: yes\n");
+  io.stdout.write(`event_id: ${result.event.event_id}\n`);
+  io.stdout.write(`event_hash: ${eventRecord.content_hash}\n`);
+  io.stdout.write(`view_id: ${result.view.view_id}\n`);
+  io.stdout.write(`view_hash: ${viewRecord.content_hash}\n`);
+  io.stdout.write(`capsule_id: ${result.updatedCapsule.capsule_id}\n`);
+  io.stdout.write(`capsule_hash: ${capsuleRecord.content_hash}\n`);
+
+  if (result.completion.trace.requestId) {
+    io.stdout.write(`request_id: ${result.completion.trace.requestId}\n`);
+  }
+
+  if (result.completion.trace.provider) {
+    io.stdout.write(`provider: ${result.completion.trace.provider}\n`);
+  }
+
+  if (result.completion.trace.billing.totalCost) {
+    io.stdout.write(`total_cost: ${result.completion.trace.billing.totalCost} neuron\n`);
+  }
 }
 
 async function runCapsuleViewCommand(args, projectRoot, io) {

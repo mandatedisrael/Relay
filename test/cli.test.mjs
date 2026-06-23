@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { runCli } from "../src/cli.mjs";
 import { DEFAULT_ROUTER_BASE_URL, loadConfig } from "../src/config.mjs";
-import { saveCapsule } from "../src/local-store.mjs";
+import { saveCapsule, saveEvent } from "../src/local-store.mjs";
 
 function createIo(env = {}, cwd = process.cwd(), fetchImpl = undefined) {
   let stdout = "";
@@ -226,6 +226,83 @@ describe("Relay CLI", () => {
     assert.equal(stderr, "");
   });
 
+  it("switches to another model using a transcript-independent capsule handoff", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({
+      OG_INFERENCE_API_KEY: "sk-test"
+    }, projectRoot, async () => ({
+      ok: true,
+      async json() {
+        return {
+          id: "chatcmpl_switch_001",
+          model: "example/model-b",
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: "Continuing from the capsule: patch checkout/session.ts next."
+              }
+            }
+          ],
+          x_0g_trace: {
+            request_id: "req_switch_001",
+            provider: "0x0000000000000000000000000000000000000001",
+            billing: {
+              total_cost: "45"
+            }
+          }
+        };
+      }
+    }));
+
+    await saveCapsule(projectRoot, sampleCapsule());
+    await saveEvent(projectRoot, sampleSwitchEvent());
+
+    await runCli([
+      "switch",
+      "--to",
+      "example/model-b",
+      "--mode",
+      "standard",
+      "--message",
+      "Continue from the capsule"
+    ], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /Continuing from the capsule/);
+    assert.match(stdout, /Switched to: example\/model-b/);
+    assert.match(stdout, /Context mode: standard/);
+    assert.match(stdout, /Transcript-independent: yes/);
+    assert.match(stdout, /event_id: evt_req_switch_001/);
+    assert.match(stdout, /capsule_id: ctx_test_001/);
+    assert.equal(stderr, "");
+
+    const eventFile = await stat(join(projectRoot, ".relay", "events", "evt_req_switch_001.json"));
+    assert.equal(eventFile.isFile(), true);
+  });
+
+  it("fails clearly when switch is missing --to", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({ OG_INFERENCE_API_KEY: "sk-test" }, projectRoot);
+    await saveCapsule(projectRoot, sampleCapsule());
+
+    await assert.rejects(
+      () => runCli(["switch", "--mode", "standard"], harness.io),
+      /--to is required/
+    );
+  });
+
+  it("fails clearly when switch is missing an inference key", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({}, projectRoot);
+    await saveCapsule(projectRoot, sampleCapsule());
+
+    await assert.rejects(
+      () => runCli(["switch", "--to", "example/model-b", "--mode", "standard"], harness.io),
+      /OG_INFERENCE_API_KEY/
+    );
+  });
+
   it("fails clearly when capsule view is missing --mode", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
     const harness = createIo({}, projectRoot);
@@ -254,6 +331,40 @@ describe("Relay CLI", () => {
     });
   });
 });
+
+function sampleSwitchEvent() {
+  return {
+    schema: "relay.event.v1",
+    event_id: "evt_001",
+    timestamp: "2026-06-23T10:01:00.000Z",
+    kind: "model.response",
+    source: {
+      runtime: "0g-router",
+      model_id: "example/model-a",
+      provider: "0x0000000000000000000000000000000000000000",
+      request_id: "req_001"
+    },
+    trace: {
+      model_id: "example/model-a",
+      provider: "0x0000000000000000000000000000000000000000",
+      request_id: "req_001",
+      input_tokens: 100,
+      output_tokens: 50,
+      billing: {
+        currency: "neuron",
+        input_cost: "10",
+        output_cost: "20",
+        total_cost: "30"
+      },
+      tee_verified: null
+    },
+    payload: {
+      prompt: "This full transcript prompt must never be replayed during model switching.",
+      response: "This full transcript response must never be replayed during model switching."
+    },
+    content_hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  };
+}
 
 function sampleCapsule() {
   return {
