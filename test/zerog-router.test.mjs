@@ -13,6 +13,7 @@ describe("0G Router model catalog", () => {
           owned_by: "0G Foundation",
           name: "Example Model",
           context_length: 131072,
+          provider_count: 3,
           pricing: {
             prompt: "100000000000",
             completion: "320000000000"
@@ -33,6 +34,7 @@ describe("0G Router model catalog", () => {
         name: "Example Model",
         owner: "0G Foundation",
         contextLength: 131072,
+        providerCount: 3,
         pricing: {
           prompt: "100000000000",
           completion: "320000000000"

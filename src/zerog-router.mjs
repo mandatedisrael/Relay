@@ -28,6 +28,7 @@ export function parseModelCatalog(body) {
     name: typeof model.name === "string" ? model.name : model.id,
     owner: typeof model.owned_by === "string" ? model.owned_by : null,
     contextLength: readInteger(model.context_length),
+    providerCount: readInteger(model.provider_count ?? model.providers_count ?? model.healthy_providers),
     pricing: {
       prompt: readStringOrNull(model.pricing?.prompt),
       completion: readStringOrNull(model.pricing?.completion)

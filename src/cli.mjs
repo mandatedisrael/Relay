@@ -55,6 +55,7 @@ export async function runCli(args, io) {
 
     for (const model of models) {
       const context = model.contextLength === null ? "unknown ctx" : `${model.contextLength} ctx`;
+      const providers = model.providerCount === null ? "providers unknown" : `${model.providerCount} providers`;
       const prompt = model.pricing.prompt ?? "unknown";
       const completion = model.pricing.completion ?? "unknown";
       const capabilities = [
@@ -64,7 +65,7 @@ export async function runCli(args, io) {
         model.capabilities.json ? "json" : null
       ].filter(Boolean).join(", ") || "capabilities unknown";
 
-      io.stdout.write(`${model.id} | ${context} | prompt ${prompt} | completion ${completion} | ${capabilities}\n`);
+      io.stdout.write(`${model.id} | ${context} | ${providers} | prompt ${prompt} | completion ${completion} | ${capabilities}\n`);
     }
     return;
   }

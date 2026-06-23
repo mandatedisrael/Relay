@@ -66,6 +66,7 @@ describe("Relay CLI", () => {
             {
               id: "example/model",
               context_length: 262144,
+              provider_count: 2,
               pricing: {
                 prompt: "100",
                 completion: "200"
@@ -86,7 +87,7 @@ describe("Relay CLI", () => {
 
     const { stdout, stderr } = harness.output();
     assert.match(stdout, /0G Router models \(1\)/);
-    assert.match(stdout, /example\/model \| 262144 ctx/);
+    assert.match(stdout, /example\/model \| 262144 ctx \| 2 providers/);
     assert.match(stdout, /chat, tools, json/);
     assert.equal(stderr, "");
   });
