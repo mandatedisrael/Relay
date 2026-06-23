@@ -14,7 +14,7 @@ Usage:
   relay init
   relay doctor
   relay models
-  relay ask --model <model-id> "message"
+  relay ask --model <model-id> [--goal "task description"] "message"
   relay capsule list
   relay capsule inspect [capsule-id]
 
@@ -22,7 +22,7 @@ Commands:
   init       Create local Relay runtime folders.
   doctor     Check local setup without requiring secrets.
   models     List live 0G Router models.
-  ask        Send one chat completion through 0G Router.
+  ask        Send one chat completion through 0G Router. Supports --goal for capsule.
   capsule    Inspect local Context Capsules.
 
 MVP commands coming next:
@@ -100,8 +100,14 @@ export async function runCli(args, io) {
 
 async function runAskCommand(args, io) {
   const modelIndex = args.indexOf("--model");
+  const goalIndex = args.indexOf("--goal");
   const model = modelIndex === -1 ? "" : args[modelIndex + 1];
-  const message = args.filter((_, index) => index !== modelIndex && index !== modelIndex + 1).join(" ").trim();
+  const explicitGoal = goalIndex === -1 ? null : args[goalIndex + 1];
+  const filtered = args.filter((_, index) =>
+    index !== modelIndex && index !== modelIndex + 1 &&
+    index !== goalIndex && index !== goalIndex + 1
+  );
+  const message = filtered.join(" ").trim();
   const config = loadConfig(io.env);
 
   const completion = await createChatCompletion({
@@ -120,7 +126,7 @@ async function runAskCommand(args, io) {
   const event = buildModelResponseEvent({ completion, prompt: message });
   const eventRecord = await saveEvent(projectRoot, event);
 
-  const capsule = createInitialCapsule({ goal: message, event });
+  const capsule = createInitialCapsule({ goal: explicitGoal || message, event });
   const capsuleRecord = await saveCapsule(projectRoot, capsule);
 
   io.stdout.write(`${completion.content}\n`);
