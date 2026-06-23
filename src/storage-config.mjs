@@ -22,7 +22,7 @@ export const STORAGE_NETWORKS = Object.freeze({
 export const STORAGE_MODES = Object.freeze(["turbo", "standard"]);
 
 export function loadStorageConfig(env) {
-  const networkName = (env.OG_STORAGE_NETWORK || "testnet").toLowerCase();
+  const networkName = (env.OG_STORAGE_NETWORK || "mainnet").toLowerCase();
   const mode = (env.OG_STORAGE_MODE || "turbo").toLowerCase();
   const network = STORAGE_NETWORKS[networkName];
 

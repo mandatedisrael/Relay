@@ -7,11 +7,12 @@ import {
 } from "../src/storage-config.mjs";
 
 describe("Relay storage config", () => {
-  it("loads testnet turbo defaults", () => {
+  it("loads mainnet turbo defaults", () => {
     const config = loadStorageConfig({});
-    assert.equal(config.network, "testnet");
+    assert.equal(config.network, "mainnet");
     assert.equal(config.mode, "turbo");
-    assert.match(config.indexerUrl, /turbo/);
+    assert.equal(config.evmRpcUrl, "https://evmrpc.0g.ai");
+    assert.equal(config.indexerUrl, "https://indexer-storage-turbo.0g.ai");
     assert.equal(config.hasPrivateKey, false);
   });
 
