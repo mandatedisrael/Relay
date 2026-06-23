@@ -189,24 +189,24 @@ Done when:
 
 Build the token-efficient memory views.
 
-- [ ] Implement `compact` view.
-- [ ] Implement `standard` view.
-- [ ] Implement `deep` view.
-- [ ] Add token estimation for:
-  - [ ] full event history
-  - [ ] compact view
-  - [ ] standard view
-  - [ ] deep view
-- [ ] Add context reduction percentage.
-- [ ] Add mode-specific section selection.
-- [ ] Add command preview before switch.
+- [x] Implement `compact` view.
+- [x] Implement `standard` view.
+- [x] Implement `deep` view.
+- [x] Add token estimation for:
+  - [x] full event history
+  - [x] compact view
+  - [x] standard view
+  - [x] deep view
+- [x] Add context reduction percentage.
+- [x] Add mode-specific section selection.
+- [x] Add command preview before switch.
 
 Done when:
 
-- [ ] `relay capsule view --mode compact` produces a small handoff.
-- [ ] `relay capsule view --mode standard` includes enough working state for normal continuation.
-- [ ] `relay capsule view --mode deep` includes richer evidence.
-- [ ] Relay displays estimated token savings compared with full-history replay.
+- [x] `relay capsule view --mode compact` produces a small handoff.
+- [x] `relay capsule view --mode standard` includes enough working state for normal continuation.
+- [x] `relay capsule view --mode deep` includes richer evidence.
+- [x] Relay displays estimated token savings compared with full-history replay.
 
 ## Phase 8: Model switching
 
@@ -345,7 +345,7 @@ Use this section to record completed milestones as the build advances.
 - [ ] Phase 6 complete:
 - Phase 4 progress: real ask + x_0g_trace capture + event recording complete.
 - Phase 6 progress: basic event-to-initial-capsule compiler implemented and wired to ask (produces valid capsules with observed facts + traces).
-- [ ] Phase 7 complete:
+- [x] Phase 7 complete: compact/standard/deep views, token estimates, reduction preview, and `relay capsule view`.
 - [ ] Phase 8 complete:
 - [ ] Phase 9 complete:
 - [ ] Phase 10 complete:
