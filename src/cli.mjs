@@ -1,8 +1,9 @@
 import { loadConfig } from "./config.mjs";
 import { buildModelResponseEvent } from "./events.mjs";
-import { initializeLocalStore, listCapsules, readCapsule } from "./local-store.mjs";
+import { initializeLocalStore, listCapsules, readCapsule, saveCapsule } from "./local-store.mjs";
 import { saveEvent } from "./local-store.mjs";
 import { createChatCompletion, fetchModelCatalog } from "./zerog-router.mjs";
+import { createInitialCapsule } from "./capsule-compiler.mjs";
 
 const HELP_TEXT = `Relay
 
@@ -115,12 +116,16 @@ async function runAskCommand(args, io) {
     ],
     fetchImpl: io.fetch
   });
+  const projectRoot = io.cwd ?? process.cwd();
   const event = buildModelResponseEvent({ completion, prompt: message });
-  const record = await saveEvent(io.cwd ?? process.cwd(), event);
+  const eventRecord = await saveEvent(projectRoot, event);
+
+  const capsule = createInitialCapsule({ goal: message, event });
+  const capsuleRecord = await saveCapsule(projectRoot, capsule);
 
   io.stdout.write(`${completion.content}\n`);
   io.stdout.write(`\nevent_id: ${event.event_id}\n`);
-  io.stdout.write(`event_hash: ${record.content_hash}\n`);
+  io.stdout.write(`event_hash: ${eventRecord.content_hash}\n`);
 
   if (completion.trace.requestId) {
     io.stdout.write(`request_id: ${completion.trace.requestId}\n`);
@@ -133,6 +138,8 @@ async function runAskCommand(args, io) {
   if (completion.trace.billing.totalCost) {
     io.stdout.write(`total_cost: ${completion.trace.billing.totalCost} neuron\n`);
   }
+
+  io.stdout.write(`capsule_id: ${capsule.capsule_id}\n`);
 }
 
 async function runCapsuleCommand(args, io) {
