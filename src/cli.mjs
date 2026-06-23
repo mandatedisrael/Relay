@@ -1,5 +1,6 @@
 import { loadConfig } from "./config.mjs";
 import { initializeLocalStore, listCapsules, readCapsule } from "./local-store.mjs";
+import { fetchModelCatalog } from "./zerog-router.mjs";
 
 const HELP_TEXT = `Relay
 
@@ -9,12 +10,14 @@ Usage:
   relay --help
   relay init
   relay doctor
+  relay models
   relay capsule list
   relay capsule inspect [capsule-id]
 
 Commands:
   init       Create local Relay runtime folders.
   doctor     Check local setup without requiring secrets.
+  models     List live 0G Router models.
   capsule    Inspect local Context Capsules.
 
 MVP commands coming next:
@@ -42,6 +45,27 @@ export async function runCli(args, io) {
     io.stdout.write(`0G Router base URL: ${config.routerBaseUrl}\n`);
     io.stdout.write(`0G inference key: ${config.hasInferenceKey ? "configured" : "missing"}\n`);
     io.stdout.write("Local checks passed. Network checks are not implemented yet.\n");
+    return;
+  }
+
+  if (command === "models") {
+    const config = loadConfig(io.env);
+    const models = await fetchModelCatalog({ baseUrl: config.routerBaseUrl, fetchImpl: io.fetch });
+    io.stdout.write(`0G Router models (${models.length})\n`);
+
+    for (const model of models) {
+      const context = model.contextLength === null ? "unknown ctx" : `${model.contextLength} ctx`;
+      const prompt = model.pricing.prompt ?? "unknown";
+      const completion = model.pricing.completion ?? "unknown";
+      const capabilities = [
+        model.capabilities.chat ? "chat" : null,
+        model.capabilities.tools ? "tools" : null,
+        model.capabilities.vision ? "vision" : null,
+        model.capabilities.json ? "json" : null
+      ].filter(Boolean).join(", ") || "capabilities unknown";
+
+      io.stdout.write(`${model.id} | ${context} | prompt ${prompt} | completion ${completion} | ${capabilities}\n`);
+    }
     return;
   }
 

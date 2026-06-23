@@ -1,4 +1,4 @@
-export async function fetchModelCatalog({ baseUrl, fetchImpl = fetch } = {}) {
+export async function fetchModelCatalog({ baseUrl, fetchImpl = globalThis.fetch } = {}) {
   if (!baseUrl) {
     throw new Error("0G Router base URL is required.");
   }

@@ -7,7 +7,7 @@ import { runCli } from "../src/cli.mjs";
 import { DEFAULT_ROUTER_BASE_URL, loadConfig } from "../src/config.mjs";
 import { saveCapsule } from "../src/local-store.mjs";
 
-function createIo(env = {}, cwd = process.cwd()) {
+function createIo(env = {}, cwd = process.cwd(), fetchImpl = undefined) {
   let stdout = "";
   let stderr = "";
 
@@ -15,6 +15,7 @@ function createIo(env = {}, cwd = process.cwd()) {
     io: {
       cwd,
       env,
+      fetch: fetchImpl,
       stdout: {
         write(chunk) {
           stdout += chunk;
@@ -52,6 +53,41 @@ describe("Relay CLI", () => {
     const { stdout, stderr } = harness.output();
     assert.match(stdout, /0G inference key: missing/);
     assert.match(stdout, /Local checks passed/);
+    assert.equal(stderr, "");
+  });
+
+  it("lists 0G Router models", async () => {
+    const harness = createIo({}, process.cwd(), async () => ({
+      ok: true,
+      async json() {
+        return {
+          object: "list",
+          data: [
+            {
+              id: "example/model",
+              context_length: 262144,
+              pricing: {
+                prompt: "100",
+                completion: "200"
+              },
+              capabilities: {
+                chat: true,
+                tools: true,
+                vision: false,
+                json_mode: true
+              }
+            }
+          ]
+        };
+      }
+    }));
+
+    await runCli(["models"], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /0G Router models \(1\)/);
+    assert.match(stdout, /example\/model \| 262144 ctx/);
+    assert.match(stdout, /chat, tools, json/);
     assert.equal(stderr, "");
   });
 
