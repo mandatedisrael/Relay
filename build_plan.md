@@ -94,21 +94,21 @@ Done when:
 Build the local-first memory layer.
 
 - [x] Create `.relay/` local data directory.
-- [ ] Store events locally.
-- [ ] Store capsules locally.
-- [ ] Store context views locally.
-- [ ] Store model traces locally.
-- [ ] Add content hashing for stored payloads.
-- [ ] Add basic capsule listing.
-- [ ] Add capsule inspection command.
+- [x] Store events locally.
+- [x] Store capsules locally.
+- [x] Store context views locally.
+- [x] Store model traces locally.
+- [x] Add content hashing for stored payloads.
+- [x] Add basic capsule listing.
+- [x] Add capsule inspection command.
 
 MVP storage can be simple JSON/JSONL files. SQLite can come later if the file format starts getting painful.
 
 Done when:
 
-- [ ] `relay capsule inspect` shows the latest capsule.
-- [ ] Event and capsule files are deterministic enough for tests.
-- [ ] Local `.relay/` data never appears in git status.
+- [x] `relay capsule inspect` shows the latest capsule.
+- [x] Event and capsule files are deterministic enough for tests.
+- [x] Local `.relay/` data never appears in git status.
 
 ## Phase 4: 0G Router integration
 
@@ -339,7 +339,7 @@ Use this section to record completed milestones as the build advances.
 
 - [ ] Phase 1 complete:
 - [x] Phase 2 complete: protocol schemas, fixtures, validation utilities, and evidence checks are implemented and tested.
-- [ ] Phase 3 complete:
+- [x] Phase 3 complete: local events, capsules, views, traces, content hashing, capsule listing, and capsule inspection are implemented and tested.
 - [ ] Phase 4 complete:
 - [ ] Phase 5 complete:
 - [ ] Phase 6 complete:
