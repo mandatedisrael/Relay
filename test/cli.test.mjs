@@ -142,6 +142,10 @@ describe("Relay CLI", () => {
 
     const eventFile = await stat(join(projectRoot, ".relay", "events", "evt_req_001.json"));
     assert.equal(eventFile.isFile(), true);
+
+    assert.match(stdout, /capsule_id: ctx_req_001/);
+    const capsuleFile = await stat(join(projectRoot, ".relay", "capsules", "ctx_req_001.json"));
+    assert.equal(capsuleFile.isFile(), true);
   });
 
   it("initializes local Relay runtime folders", async () => {
