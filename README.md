@@ -29,20 +29,19 @@ All paths use the same `.relay/` task memory on disk.
 
 ## Install
 
-From a clone:
+```sh
+npm install -g @notmartin/relay
+relay init
+```
+
+From source:
 
 ```sh
 git clone https://github.com/mandatedisrael/Relay.git
 cd Relay
 npm install
-cp .env.example .env
-```
-
-Or link the CLI globally from the repo:
-
-```sh
 npm link
-relay --help
+relay init
 ```
 
 ## First run
