@@ -18,6 +18,54 @@ export async function fetchModelCatalog({ baseUrl, fetchImpl = globalThis.fetch 
   return parseModelCatalog(body);
 }
 
+export async function createChatCompletion({
+  baseUrl,
+  apiKey,
+  model,
+  messages,
+  fetchImpl = globalThis.fetch,
+  verifyTee = false
+} = {}) {
+  if (!baseUrl) {
+    throw new Error("0G Router base URL is required.");
+  }
+
+  if (!apiKey) {
+    throw new Error("OG_INFERENCE_API_KEY is required for chat completions.");
+  }
+
+  if (!model) {
+    throw new Error("A model ID is required.");
+  }
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    throw new Error("At least one chat message is required.");
+  }
+
+  const response = await fetchImpl(routerUrl(baseUrl, "chat/completions"), {
+    method: "POST",
+    headers: {
+      accept: "application/json",
+      authorization: `Bearer ${apiKey}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      verify_tee: verifyTee
+    })
+  });
+
+  const body = await readJsonResponse(response);
+
+  if (!response.ok) {
+    const message = body?.error?.message ?? body?.message ?? `HTTP ${response.status}`;
+    throw new Error(`0G Router chat completion failed: ${message}`);
+  }
+
+  return parseChatCompletion(body);
+}
+
 export function parseModelCatalog(body) {
   if (!body || body.object !== "list" || !Array.isArray(body.data)) {
     throw new Error("0G Router returned an invalid model catalog.");
@@ -35,6 +83,41 @@ export function parseModelCatalog(body) {
     },
     capabilities: readCapabilities(model)
   }));
+}
+
+export function parseChatCompletion(body) {
+  if (!body || !Array.isArray(body.choices) || body.choices.length === 0) {
+    throw new Error("0G Router returned an invalid chat completion.");
+  }
+
+  const choice = body.choices[0];
+  const message = choice.message ?? {};
+  const trace = body.x_0g_trace ?? {};
+
+  return {
+    id: typeof body.id === "string" ? body.id : null,
+    model: typeof body.model === "string" ? body.model : null,
+    content: typeof message.content === "string" ? message.content : "",
+    reasoningContent: typeof message.reasoning_content === "string"
+      ? message.reasoning_content
+      : message.provider_specific_fields?.reasoning_content ?? null,
+    usage: {
+      inputTokens: readInteger(body.usage?.prompt_tokens),
+      outputTokens: readInteger(body.usage?.completion_tokens),
+      totalTokens: readInteger(body.usage?.total_tokens)
+    },
+    trace: {
+      requestId: typeof trace.request_id === "string" ? trace.request_id : null,
+      provider: typeof trace.provider === "string" ? trace.provider : null,
+      billing: {
+        inputCost: readStringOrNull(trace.billing?.input_cost),
+        outputCost: readStringOrNull(trace.billing?.output_cost),
+        totalCost: readStringOrNull(trace.billing?.total_cost)
+      },
+      teeVerified: typeof trace.tee_verified === "boolean" ? trace.tee_verified : null
+    },
+    raw: body
+  };
 }
 
 function routerUrl(baseUrl, path) {
@@ -87,4 +170,12 @@ function readInteger(value) {
 
 function readStringOrNull(value) {
   return typeof value === "string" ? value : null;
+}
+
+async function readJsonResponse(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
 }

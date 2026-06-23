@@ -1,6 +1,8 @@
 import { loadConfig } from "./config.mjs";
+import { buildModelResponseEvent } from "./events.mjs";
 import { initializeLocalStore, listCapsules, readCapsule } from "./local-store.mjs";
-import { fetchModelCatalog } from "./zerog-router.mjs";
+import { saveEvent } from "./local-store.mjs";
+import { createChatCompletion, fetchModelCatalog } from "./zerog-router.mjs";
 
 const HELP_TEXT = `Relay
 
@@ -11,6 +13,7 @@ Usage:
   relay init
   relay doctor
   relay models
+  relay ask --model <model-id> "message"
   relay capsule list
   relay capsule inspect [capsule-id]
 
@@ -18,6 +21,7 @@ Commands:
   init       Create local Relay runtime folders.
   doctor     Check local setup without requiring secrets.
   models     List live 0G Router models.
+  ask        Send one chat completion through 0G Router.
   capsule    Inspect local Context Capsules.
 
 MVP commands coming next:
@@ -70,6 +74,11 @@ export async function runCli(args, io) {
     return;
   }
 
+  if (command === "ask") {
+    await runAskCommand(args.slice(1), io);
+    return;
+  }
+
   if (command === "init") {
     const result = await initializeLocalStore(io.cwd ?? process.cwd());
     io.stdout.write(`Relay initialized at ${result.root}\n`);
@@ -86,6 +95,44 @@ export async function runCli(args, io) {
   io.stderr.write(HELP_TEXT);
   io.stderr.write("\n");
   throw new Error("Command failed.");
+}
+
+async function runAskCommand(args, io) {
+  const modelIndex = args.indexOf("--model");
+  const model = modelIndex === -1 ? "" : args[modelIndex + 1];
+  const message = args.filter((_, index) => index !== modelIndex && index !== modelIndex + 1).join(" ").trim();
+  const config = loadConfig(io.env);
+
+  const completion = await createChatCompletion({
+    baseUrl: config.routerBaseUrl,
+    apiKey: config.inferenceApiKey,
+    model,
+    messages: [
+      {
+        role: "user",
+        content: message
+      }
+    ],
+    fetchImpl: io.fetch
+  });
+  const event = buildModelResponseEvent({ completion, prompt: message });
+  const record = await saveEvent(io.cwd ?? process.cwd(), event);
+
+  io.stdout.write(`${completion.content}\n`);
+  io.stdout.write(`\nevent_id: ${event.event_id}\n`);
+  io.stdout.write(`event_hash: ${record.content_hash}\n`);
+
+  if (completion.trace.requestId) {
+    io.stdout.write(`request_id: ${completion.trace.requestId}\n`);
+  }
+
+  if (completion.trace.provider) {
+    io.stdout.write(`provider: ${completion.trace.provider}\n`);
+  }
+
+  if (completion.trace.billing.totalCost) {
+    io.stdout.write(`total_cost: ${completion.trace.billing.totalCost} neuron\n`);
+  }
 }
 
 async function runCapsuleCommand(args, io) {

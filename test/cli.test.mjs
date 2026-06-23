@@ -92,6 +92,58 @@ describe("Relay CLI", () => {
     assert.equal(stderr, "");
   });
 
+  it("fails clearly when ask is missing an inference key", async () => {
+    const harness = createIo();
+
+    await assert.rejects(
+      () => runCli(["ask", "--model", "example/model", "hello"], harness.io),
+      /OG_INFERENCE_API_KEY/
+    );
+  });
+
+  it("sends an ask request through the Router client", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({
+      OG_INFERENCE_API_KEY: "sk-test"
+    }, projectRoot, async () => ({
+      ok: true,
+      async json() {
+        return {
+          id: "chatcmpl_001",
+          model: "example/model",
+          choices: [
+            {
+              message: {
+                role: "assistant",
+                content: "hello from 0G"
+              }
+            }
+          ],
+          x_0g_trace: {
+            request_id: "req_001",
+            provider: "0x0000000000000000000000000000000000000000",
+            billing: {
+              total_cost: "300"
+            }
+          }
+        };
+      }
+    }));
+
+    await runCli(["ask", "--model", "example/model", "hello"], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /hello from 0G/);
+    assert.match(stdout, /event_id: evt_req_001/);
+    assert.match(stdout, /event_hash: sha256:/);
+    assert.match(stdout, /request_id: req_001/);
+    assert.match(stdout, /total_cost: 300 neuron/);
+    assert.equal(stderr, "");
+
+    const eventFile = await stat(join(projectRoot, ".relay", "events", "evt_req_001.json"));
+    assert.equal(eventFile.isFile(), true);
+  });
+
   it("initializes local Relay runtime folders", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
     const harness = createIo({}, projectRoot);
@@ -137,6 +189,7 @@ describe("Relay CLI", () => {
   it("loads config from environment with safe defaults", () => {
     assert.deepEqual(loadConfig({}), {
       routerBaseUrl: DEFAULT_ROUTER_BASE_URL,
+      inferenceApiKey: "",
       hasInferenceKey: false
     });
 
@@ -145,6 +198,7 @@ describe("Relay CLI", () => {
       OG_INFERENCE_API_KEY: "sk-test"
     }), {
       routerBaseUrl: "https://example.invalid",
+      inferenceApiKey: "sk-test",
       hasInferenceKey: true
     });
   });
