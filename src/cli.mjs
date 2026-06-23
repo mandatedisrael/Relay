@@ -1,9 +1,19 @@
 import { loadConfig } from "./config.mjs";
 import { buildModelResponseEvent } from "./events.mjs";
-import { initializeLocalStore, listCapsules, readCapsule, saveCapsule } from "./local-store.mjs";
-import { saveEvent } from "./local-store.mjs";
+import {
+  initializeLocalStore,
+  listCapsules,
+  listEvents,
+  readCapsule,
+  readEvent,
+  saveCapsule,
+  saveEvent,
+  saveView
+} from "./local-store.mjs";
 import { createChatCompletion, fetchModelCatalog } from "./zerog-router.mjs";
 import { createInitialCapsule } from "./capsule-compiler.mjs";
+import { buildContextView } from "./view-builder.mjs";
+import { CONTEXT_MODES } from "./protocol.mjs";
 
 const HELP_TEXT = `Relay
 
@@ -17,13 +27,14 @@ Usage:
   relay ask --model <model-id> [--goal "task description"] "message"
   relay capsule list
   relay capsule inspect [capsule-id]
+  relay capsule view --mode <compact|standard|deep> [capsule-id]
 
 Commands:
   init       Create local Relay runtime folders.
   doctor     Check local setup without requiring secrets.
   models     List live 0G Router models.
   ask        Send one chat completion through 0G Router. Supports --goal for capsule.
-  capsule    Inspect local Context Capsules.
+  capsule    Inspect, list, and build context views from local Context Capsules.
 
 MVP commands coming next:
   relay models
@@ -166,7 +177,7 @@ async function runCapsuleCommand(args, io) {
   }
 
   if (subcommand === "inspect") {
-    const capsuleId = args[1] ?? "latest";
+    const capsuleId = parseOptionalCapsuleId(args.slice(1));
     const record = await readCapsule(projectRoot, capsuleId);
     if (!record) {
       io.stdout.write("No local Context Capsules found.\n");
@@ -184,6 +195,87 @@ async function runCapsuleCommand(args, io) {
     return;
   }
 
+  if (subcommand === "view") {
+    await runCapsuleViewCommand(args.slice(1), projectRoot, io);
+    return;
+  }
+
   io.stderr.write(`Unknown capsule command: ${subcommand}\n`);
   throw new Error("Command failed.");
+}
+
+async function runCapsuleViewCommand(args, projectRoot, io) {
+  const modeIndex = args.indexOf("--mode");
+  const jsonFlag = args.includes("--json");
+  const mode = modeIndex === -1 ? "" : args[modeIndex + 1];
+  const filtered = args.filter((_, index) =>
+    index !== modeIndex && index !== modeIndex + 1 && args[index] !== "--json"
+  );
+  const capsuleId = parseOptionalCapsuleId(filtered);
+
+  if (!mode) {
+    throw new Error(`--mode is required. Choose one of: ${CONTEXT_MODES.join(", ")}.`);
+  }
+
+  if (!CONTEXT_MODES.includes(mode)) {
+    throw new Error(`Invalid context mode "${mode}". Choose one of: ${CONTEXT_MODES.join(", ")}.`);
+  }
+
+  const record = await readCapsule(projectRoot, capsuleId);
+  if (!record) {
+    io.stdout.write("No local Context Capsules found.\n");
+    return;
+  }
+
+  const events = await loadEventPayloads(projectRoot);
+  const result = buildContextView({
+    capsule: record.payload,
+    mode,
+    events
+  });
+  const viewRecord = await saveView(projectRoot, result.view);
+
+  if (jsonFlag) {
+    io.stdout.write(`${JSON.stringify({
+      view: result.view,
+      estimates: result.estimates,
+      view_hash: viewRecord.content_hash,
+      handoff: result.handoff
+    }, null, 2)}\n`);
+    return;
+  }
+
+  io.stdout.write(`Context mode: ${mode}\n`);
+  io.stdout.write(`Source capsule: ${record.payload.capsule_id}\n`);
+  io.stdout.write(`Estimated handoff: ${formatTokenCount(result.estimates.viewTokens)} tokens\n`);
+  io.stdout.write(`Full event history: ${formatTokenCount(result.estimates.fullHistoryTokens)} tokens\n`);
+
+  if (result.estimates.reductionPercent === null) {
+    io.stdout.write("Estimated context reduction: unavailable\n");
+  } else {
+    io.stdout.write(`Estimated context reduction: ${result.estimates.reductionPercent}%\n`);
+  }
+
+  io.stdout.write(`Sections: ${result.view.sections.join(", ")}\n`);
+  io.stdout.write(`View ID: ${result.view.view_id}\n`);
+  io.stdout.write(`View hash: ${viewRecord.content_hash}\n`);
+  io.stdout.write("\n--- Handoff preview ---\n");
+  io.stdout.write(`${result.handoff}\n`);
+}
+
+function parseOptionalCapsuleId(args) {
+  const candidate = args.find((arg) => !arg.startsWith("--"));
+  return candidate ?? "latest";
+}
+
+async function loadEventPayloads(projectRoot) {
+  const listed = await listEvents(projectRoot);
+  const records = await Promise.all(
+    listed.map((entry) => readEvent(projectRoot, entry.id))
+  );
+  return records.map((record) => record.payload);
+}
+
+function formatTokenCount(value) {
+  return new Intl.NumberFormat("en-US").format(value);
 }

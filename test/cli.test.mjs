@@ -190,6 +190,53 @@ describe("Relay CLI", () => {
     assert.equal(stderr, "");
   });
 
+  it("builds a standard context view with token estimates", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({}, projectRoot);
+    await saveCapsule(projectRoot, sampleCapsule());
+
+    await runCli(["capsule", "view", "--mode", "standard"], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /Context mode: standard/);
+    assert.match(stdout, /Estimated handoff: /);
+    assert.match(stdout, /Full event history: /);
+    assert.match(stdout, /Sections: /);
+    assert.match(stdout, /--- Handoff preview ---/);
+    assert.match(stdout, /Test Relay capsule inspection/);
+    assert.equal(stderr, "");
+
+    const viewFile = await stat(join(projectRoot, ".relay", "views", "view_test_001_standard.json"));
+    assert.equal(viewFile.isFile(), true);
+  });
+
+  it("returns JSON output for capsule view when requested", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({}, projectRoot);
+    await saveCapsule(projectRoot, sampleCapsule());
+
+    await runCli(["capsule", "view", "--mode", "compact", "--json"], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    const payload = JSON.parse(stdout);
+    assert.equal(payload.view.mode, "compact");
+    assert.equal(payload.view.source_capsule_id, "ctx_test_001");
+    assert.ok(payload.estimates.viewTokens >= 0);
+    assert.match(payload.handoff, /Relay Context Capsule/);
+    assert.equal(stderr, "");
+  });
+
+  it("fails clearly when capsule view is missing --mode", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({}, projectRoot);
+    await saveCapsule(projectRoot, sampleCapsule());
+
+    await assert.rejects(
+      () => runCli(["capsule", "view"], harness.io),
+      /--mode is required/
+    );
+  });
+
   it("loads config from environment with safe defaults", () => {
     assert.deepEqual(loadConfig({}), {
       routerBaseUrl: DEFAULT_ROUTER_BASE_URL,
