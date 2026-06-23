@@ -574,6 +574,62 @@ describe("Relay CLI", () => {
     );
   });
 
+  it("hands off portable memory with relay to codex", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({
+      OG_INFERENCE_API_KEY: "sk-test",
+      OG_STORAGE_PRIVATE_KEY: "0x" + "4".repeat(64),
+      OG_STORAGE_NETWORK: "testnet"
+    }, projectRoot);
+    harness.io.storageDeps = {
+      uploadEncryptedBytes: async () => ({
+        rootHash: `0x${"c".repeat(64)}`,
+        txHash: "0xto_codex"
+      })
+    };
+    harness.io.fetch = async (url) => {
+      if (String(url).endsWith("/models")) {
+        return {
+          ok: true,
+          async json() {
+            return {
+              object: "list",
+              data: [{
+                id: "glm-5.1",
+                pricing: { prompt: "1", completion: "1" },
+                capabilities: { chat: true }
+              }]
+            };
+          }
+        };
+      }
+
+      return {
+        ok: true,
+        async json() {
+          return {
+            choices: [{ message: { content: "Codex continues from Relay memory." } }],
+            x_0g_trace: {
+              request_id: "req_codex",
+              provider: "0x0000000000000000000000000000000000000002",
+              billing: { total_cost: "9" }
+            }
+          };
+        }
+      };
+    };
+
+    await saveCapsule(projectRoot, sampleCapsule());
+    await runCli(["to", "codex", "--message", "Continue in Codex"], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /Portable handoff ready for Codex/);
+    assert.match(stdout, /Relay URL: relay:\/\/0g-storage\/testnet\//);
+    assert.match(stdout, /Handoff file:/);
+    assert.match(stdout, /Codex continues from Relay memory/);
+    assert.equal(stderr, "");
+  });
+
   it("accepts legacy command aliases", async () => {
     const harness = createIo();
 

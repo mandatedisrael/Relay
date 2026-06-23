@@ -17,6 +17,8 @@ import { fetchModelCatalog } from "./zerog-router.mjs";
 import { buildContextView } from "./view-builder.mjs";
 import { runLiveDoctorChecks } from "./live-checks.mjs";
 import { runMvpProof, saveProofReport } from "./proof-run.mjs";
+import { handoffTaskToTarget } from "./handoff-to.mjs";
+import { ensureDefaultTargetsConfig } from "./targets-config.mjs";
 import { continueTask, startTask, stepTask } from "./task-runtime.mjs";
 import { buildTaskMemorySummary } from "./task-summary.mjs";
 import { CONTEXT_MODES } from "./protocol.mjs";
@@ -51,6 +53,10 @@ Work on one task:
   relay task continue --to <model-id> --mode compact --message "hand off to another model"
   relay task status
 
+Switch coding agents:
+  relay to codex [--message "..."]
+  relay to claude-code --handoff-only
+
 Portable memory:
   relay capsule handoff --mode compact
   relay capsule publish
@@ -61,6 +67,7 @@ Verification:
 
 Commands:
   task        Start, extend, and hand off a shared task across models.
+  to          Publish task memory to 0G Storage and hand off to Codex or another target.
   capsule     Inspect, preview, publish, and fetch Context Capsules.
   status      Check local setup and live 0G connectivity.
   models      List models and probe API-key access with --allowed.
@@ -111,10 +118,20 @@ export async function runCli(args, io) {
     return;
   }
 
+  if (command === "to") {
+    await runHandoffToCommand(args.slice(1), io);
+    return;
+  }
+
   if (command === "init") {
-    const result = await initializeLocalStore(io.cwd ?? process.cwd());
+    const projectRoot = io.cwd ?? process.cwd();
+    const result = await initializeLocalStore(projectRoot);
+    const targetsPath = await ensureDefaultTargetsConfig(projectRoot);
     io.stdout.write(`Relay initialized at ${result.root}\n`);
     io.stdout.write("Created local folders for events, capsules, views, and traces.\n");
+    if (targetsPath) {
+      io.stdout.write(`Wrote default handoff targets at ${targetsPath}\n`);
+    }
     return;
   }
 
@@ -325,6 +342,64 @@ async function runDemoCommand(args, io) {
   if (!report.all_passed) {
     throw new Error("Relay end-to-end demo did not pass all steps.");
   }
+}
+
+async function runHandoffToCommand(args, io) {
+  const handoffOnly = args.includes("--handoff-only");
+  const modeIndex = args.indexOf("--mode");
+  const messageIndex = args.indexOf("--message");
+  const mode = modeIndex === -1 ? "compact" : args[modeIndex + 1];
+  const message = messageIndex === -1 ? null : args[messageIndex + 1];
+  const filtered = removeFlagValues(args, [modeIndex, messageIndex], { alsoExclude: ["--handoff-only"] });
+  const positional = filtered.filter((arg) => !arg.startsWith("--"));
+  const targetName = positional[0];
+  const projectRoot = io.cwd ?? process.cwd();
+  const config = loadConfig(io.env);
+
+  if (!targetName) {
+    throw new Error("Usage: relay to <target> [--message \"...\"] [--handoff-only] [--mode compact]");
+  }
+
+  if (!CONTEXT_MODES.includes(mode)) {
+    throw new Error(`Invalid context mode "${mode}". Choose one of: ${CONTEXT_MODES.join(", ")}.`);
+  }
+
+  const activeTask = await readActiveTask(projectRoot);
+  const capsuleId = positional[1] && isCapsuleReference(positional[1])
+    ? positional[1]
+    : (activeTask?.capsule_id ?? "latest");
+  const events = await loadEventPayloads(projectRoot);
+  const result = await handoffTaskToTarget({
+    projectRoot,
+    targetName,
+    events,
+    capsuleId,
+    mode,
+    message,
+    handoffOnly,
+    env: io.env,
+    baseUrl: config.routerBaseUrl,
+    apiKey: config.inferenceApiKey,
+    hasInferenceKey: config.hasInferenceKey,
+    fetchImpl: io.fetch,
+    storageDeps: io.storageDeps
+  });
+
+  io.stdout.write(`Portable handoff ready for ${result.target.label}\n`);
+  io.stdout.write(`Relay URL: ${result.publishResult.relayUrl}\n`);
+  io.stdout.write(`Decryption key: ${result.publishResult.keyHex}\n`);
+  io.stdout.write(`Handoff file: ${result.exportResult.targetFile}\n`);
+
+  if (result.target.external || result.target.reason === "no_inference_models_verified") {
+    io.stdout.write(`Mode: storage + paste handoff (${result.target.label} is external)\n`);
+    io.stdout.write("Open the handoff file in Codex or Claude Code and continue from there.\n");
+  } else if (result.continueResult) {
+    writeTaskInteractionOutput(io, result.continueResult);
+  } else if (handoffOnly) {
+    io.stdout.write("Mode: storage + paste handoff only\n");
+  }
+
+  io.stdout.write(`\nFetch anywhere with:\n  relay capsule fetch ${result.publishResult.relayUrl}\n`);
 }
 
 async function runTaskWorkflowCommand(subcommand, args, io) {
