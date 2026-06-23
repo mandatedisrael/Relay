@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import { runCli } from "../src/cli.mjs";
 import { DEFAULT_ROUTER_BASE_URL, loadConfig } from "../src/config.mjs";
+import { saveCapsule } from "../src/local-store.mjs";
 
 function createIo(env = {}, cwd = process.cwd()) {
   let stdout = "";
@@ -70,6 +71,32 @@ describe("Relay CLI", () => {
     }
   });
 
+  it("lists local Context Capsules", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({}, projectRoot);
+    await saveCapsule(projectRoot, sampleCapsule());
+
+    await runCli(["capsule", "list"], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /ctx_test_001/);
+    assert.equal(stderr, "");
+  });
+
+  it("inspects the latest local Context Capsule", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({}, projectRoot);
+    await saveCapsule(projectRoot, sampleCapsule());
+
+    await runCli(["capsule", "inspect"], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /Context Capsule: ctx_test_001/);
+    assert.match(stdout, /Goal: Test Relay capsule inspection/);
+    assert.match(stdout, /Verified facts: 1/);
+    assert.equal(stderr, "");
+  });
+
   it("loads config from environment with safe defaults", () => {
     assert.deepEqual(loadConfig({}), {
       routerBaseUrl: DEFAULT_ROUTER_BASE_URL,
@@ -85,3 +112,45 @@ describe("Relay CLI", () => {
     });
   });
 });
+
+function sampleCapsule() {
+  return {
+    schema: "relay.context.v1",
+    capsule_id: "ctx_test_001",
+    parent_capsule_id: null,
+    created_at: "2026-06-23T10:01:00.000Z",
+    task: {
+      goal: "Test Relay capsule inspection"
+    },
+    state: {
+      status: "in_progress",
+      next_action: "Continue testing",
+      blockers: []
+    },
+    facts: [
+      {
+        id: "fact_001",
+        text: "The capsule exists",
+        truth_state: "verified",
+        evidence: ["ev_001"]
+      }
+    ],
+    claims: [],
+    decisions: [],
+    evidence: [
+      {
+        id: "ev_001",
+        kind: "model_output",
+        source_event: "evt_001",
+        hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    model_trace: [],
+    routing: {
+      last_model: null,
+      recommended_next_step: "testing",
+      recommended_mode: "compact"
+    },
+    storage: {}
+  };
+}

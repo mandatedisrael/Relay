@@ -1,5 +1,5 @@
 import { loadConfig } from "./config.mjs";
-import { initializeLocalStore } from "./local-store.mjs";
+import { initializeLocalStore, listCapsules, readCapsule } from "./local-store.mjs";
 
 const HELP_TEXT = `Relay
 
@@ -9,10 +9,13 @@ Usage:
   relay --help
   relay init
   relay doctor
+  relay capsule list
+  relay capsule inspect [capsule-id]
 
 Commands:
-  init      Create local Relay runtime folders.
-  doctor    Check local setup without requiring secrets.
+  init       Create local Relay runtime folders.
+  doctor     Check local setup without requiring secrets.
+  capsule    Inspect local Context Capsules.
 
 MVP commands coming next:
   relay models
@@ -49,8 +52,53 @@ export async function runCli(args, io) {
     return;
   }
 
+  if (command === "capsule") {
+    await runCapsuleCommand(args.slice(1), io);
+    return;
+  }
+
   io.stderr.write(`Unknown command: ${command}\n\n`);
   io.stderr.write(HELP_TEXT);
   io.stderr.write("\n");
+  throw new Error("Command failed.");
+}
+
+async function runCapsuleCommand(args, io) {
+  const subcommand = args[0] ?? "list";
+  const projectRoot = io.cwd ?? process.cwd();
+
+  if (subcommand === "list") {
+    const capsules = await listCapsules(projectRoot);
+    if (capsules.length === 0) {
+      io.stdout.write("No local Context Capsules found.\n");
+      return;
+    }
+
+    for (const capsule of capsules) {
+      io.stdout.write(`${capsule.id}\n`);
+    }
+    return;
+  }
+
+  if (subcommand === "inspect") {
+    const capsuleId = args[1] ?? "latest";
+    const record = await readCapsule(projectRoot, capsuleId);
+    if (!record) {
+      io.stdout.write("No local Context Capsules found.\n");
+      return;
+    }
+
+    const capsule = record.payload;
+    io.stdout.write(`Context Capsule: ${capsule.capsule_id}\n`);
+    io.stdout.write(`Goal: ${capsule.task.goal}\n`);
+    io.stdout.write(`Status: ${capsule.state.status}\n`);
+    io.stdout.write(`Next action: ${capsule.state.next_action || "None"}\n`);
+    io.stdout.write(`Verified facts: ${capsule.facts.filter((fact) => fact.truth_state === "verified").length}\n`);
+    io.stdout.write(`Claims: ${capsule.claims.length}\n`);
+    io.stdout.write(`Content hash: ${record.content_hash}\n`);
+    return;
+  }
+
+  io.stderr.write(`Unknown capsule command: ${subcommand}\n`);
   throw new Error("Command failed.");
 }
