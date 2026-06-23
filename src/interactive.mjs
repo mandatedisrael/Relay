@@ -176,7 +176,11 @@ export async function runInteractiveSession(launch, io) {
 
   await resolveSessionModel(state, { projectRoot, config, io, resume: launch.resume });
 
-  writeSessionBanner(io, state, projectRoot);
+  if (launch.quietStart) {
+    io.stdout.write("relay>  What are we working on?\n\n");
+  } else {
+    writeSessionBanner(io, state, projectRoot);
+  }
 
   const rl = createInteractiveInterface(io);
   let closed = false;

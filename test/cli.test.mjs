@@ -214,7 +214,7 @@ describe("Relay CLI", () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
     const harness = createIo({}, projectRoot);
 
-    await runCli(["init"], harness.io);
+    await runCli(["init", "--non-interactive"], harness.io);
 
     const { stdout, stderr } = harness.output();
     assert.match(stdout, /Relay initialized at/);
@@ -224,6 +224,66 @@ describe("Relay CLI", () => {
       const folder = await stat(join(projectRoot, ".relay", directory));
       assert.equal(folder.isDirectory(), true);
     }
+  });
+
+  it("runs interactive init and opens the relay prompt after setup", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({}, projectRoot, async (url) => {
+      if (String(url).endsWith("/models")) {
+        return {
+          ok: true,
+          async json() {
+            return {
+              object: "list",
+              data: [{
+                id: "example/model",
+                context_length: 131072,
+                provider_count: 1,
+                pricing: { prompt: "100", completion: "200" },
+                capabilities: { chat: true }
+              }]
+            };
+          }
+        };
+      }
+
+      return {
+        ok: true,
+        async json() {
+          return {
+            model: "example/model",
+            choices: [{ message: { content: "ok" } }],
+            usage: { prompt_tokens: 1, completion_tokens: 1 },
+            x_0g_trace: {
+              request_id: "req_init",
+              provider: "0xabc",
+              billing: { total_cost: "1" }
+            }
+          };
+        }
+      };
+    });
+
+    harness.io.isTTY = true;
+    harness.io.promptMasked = async () => "sk-test-key";
+    harness.io.promptLine = async () => "";
+    harness.io.createInterface = () => ({
+      question(_prompt, callback) {
+        callback("/quit");
+      },
+      close() {},
+      on() {
+        return this;
+      }
+    });
+
+    await runCli(["init"], harness.io);
+
+    const { stdout } = harness.output();
+    assert.match(stdout, /Welcome to Relay/);
+    assert.match(stdout, /one shared memory/i);
+    assert.match(stdout, /Ready\. Opening Relay/);
+    assert.match(stdout, /What are we working on/);
   });
 
   it("lists local Context Capsules", async () => {

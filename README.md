@@ -45,25 +45,31 @@ npm link
 relay --help
 ```
 
-## Configure
+## First run
 
-Edit `.env`:
+```sh
+relay init
+```
+
+This opens a welcome wizard, masks your API key while you type, writes `.env`, creates `.relay/`, and drops you straight into the interactive `relay>` session.
+
+For scripts or CI:
+
+```sh
+relay init --non-interactive
+cp .env.example .env   # then edit manually
+```
+
+Manual `.env` keys:
 
 ```sh
 OG_INFERENCE_API_KEY=sk-...          # required for model calls
-OG_STORAGE_PRIVATE_KEY=0x...         # required for publish/fetch and relay to
-```
-
-Optional Router override (default is mainnet):
-
-```sh
-OG_ROUTER_BASE_URL=https://router-api.0g.ai/v1
+OG_STORAGE_PRIVATE_KEY=0x...         # optional until publish / relay to
 ```
 
 ## Verify setup
 
 ```sh
-relay init
 relay status
 relay models --allowed
 ```
@@ -77,7 +83,7 @@ relay models --allowed
 
 ```sh
 relay init
-relay --model glm-5.1
+# wizard finishes → you're already at relay>
 ```
 
 ```txt

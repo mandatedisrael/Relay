@@ -21,12 +21,14 @@ import { runMvpProof, saveProofReport } from "./proof-run.mjs";
 import { handoffTaskToTarget } from "./handoff-to.mjs";
 import { createRelayRouterProxy, defaultEventsLoader } from "./router-proxy.mjs";
 import { ensureDefaultTargetsConfig } from "./targets-config.mjs";
+import { loadRuntimeEnv } from "./env-loader.mjs";
 import {
   isInteractiveLaunch,
   parseInteractiveLaunchArgs,
   runInteractiveSession,
   runPrintCommand
 } from "./interactive.mjs";
+import { runOnboardingWizard } from "./onboarding.mjs";
 import { continueTask, startTask, stepTask } from "./task-runtime.mjs";
 import { buildTaskMemorySummary } from "./task-summary.mjs";
 import { CONTEXT_MODES } from "./protocol.mjs";
@@ -121,6 +123,54 @@ Aliases:
 
 `;
 
+async function runInitCommand(args, io) {
+  const projectRoot = io.cwd ?? process.cwd();
+  const result = await initializeLocalStore(projectRoot);
+  const targetsPath = await ensureDefaultTargetsConfig(projectRoot);
+  const interactiveInit = shouldRunInteractiveInit(args, io);
+
+  if (!interactiveInit) {
+    io.stdout.write(`Relay initialized at ${result.root}\n`);
+    io.stdout.write("Created local folders for events, capsules, views, and traces.\n");
+    if (targetsPath) {
+      io.stdout.write(`Wrote default handoff targets at ${targetsPath}\n`);
+    }
+    return;
+  }
+
+  const onboarding = await runOnboardingWizard(projectRoot, io);
+  const runtimeEnv = await loadRuntimeEnv(projectRoot);
+
+  if (!runtimeEnv.OG_INFERENCE_API_KEY) {
+    throw new Error("OG_INFERENCE_API_KEY is required. Run `relay init` again to configure Relay.");
+  }
+
+  await runInteractiveSession({
+    print: false,
+    resume: false,
+    model: null,
+    mode: "standard",
+    goal: null,
+    message: null,
+    quietStart: true
+  }, {
+    ...io,
+    env: runtimeEnv
+  });
+}
+
+function shouldRunInteractiveInit(args, io) {
+  if (args.includes("--non-interactive")) {
+    return false;
+  }
+
+  if (args.includes("--interactive")) {
+    return true;
+  }
+
+  return io.isTTY === true;
+}
+
 export async function runCli(args, io) {
   if (args.length === 0 || args[0] === "chat" || shouldLaunchInteractive(args)) {
     const launchArgs = args[0] === "chat" ? args.slice(1) : args;
@@ -189,14 +239,7 @@ export async function runCli(args, io) {
   }
 
   if (command === "init") {
-    const projectRoot = io.cwd ?? process.cwd();
-    const result = await initializeLocalStore(projectRoot);
-    const targetsPath = await ensureDefaultTargetsConfig(projectRoot);
-    io.stdout.write(`Relay initialized at ${result.root}\n`);
-    io.stdout.write("Created local folders for events, capsules, views, and traces.\n");
-    if (targetsPath) {
-      io.stdout.write(`Wrote default handoff targets at ${targetsPath}\n`);
-    }
+    await runInitCommand(args.slice(1), io);
     return;
   }
 
