@@ -51,6 +51,14 @@ export async function listCapsules(projectRoot) {
   return listRecords(projectRoot, "capsule");
 }
 
+export async function listEvents(projectRoot) {
+  return listRecords(projectRoot, "event");
+}
+
+export async function readEvent(projectRoot, eventId) {
+  return readRecord(projectRoot, "event", eventId);
+}
+
 export async function readCapsule(projectRoot, capsuleId = "latest") {
   if (capsuleId === "latest") {
     const capsules = await listCapsules(projectRoot);

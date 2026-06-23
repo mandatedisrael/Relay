@@ -7,7 +7,9 @@ import { canonicalJson, sha256Digest } from "../src/hash.mjs";
 import {
   initializeLocalStore,
   listCapsules,
+  listEvents,
   readCapsule,
+  readEvent,
   saveCapsule,
   saveEvent,
   saveTrace,
@@ -44,6 +46,18 @@ describe("Relay local store", () => {
     assert.equal(record.content_hash, sha256Digest(canonicalJson(capsule)));
     assert.deepEqual(listed.map((entry) => entry.id), [capsule.capsule_id]);
     assert.equal(latest.payload.capsule_id, capsule.capsule_id);
+  });
+
+  it("lists and reads saved events", async () => {
+    const projectRoot = await tempProject();
+    const event = await readFixture("protocol/fixtures/valid-event.json");
+
+    await saveEvent(projectRoot, event);
+    const listed = await listEvents(projectRoot);
+    const record = await readEvent(projectRoot, event.event_id);
+
+    assert.deepEqual(listed.map((entry) => entry.id), [event.event_id]);
+    assert.equal(record.payload.event_id, event.event_id);
   });
 
   it("saves events, views, and traces", async () => {
