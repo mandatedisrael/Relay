@@ -75,9 +75,10 @@ Interactive session (default):
 
 Inside the session, type messages directly and use /help for slash commands.
 
-Use Relay anywhere an app talks to 0G Router (Cline, Codex, custom clients):
+Client-agnostic proxy for popular coding CLIs (Claude Code, Codex, OpenCode,
+Cline, Aider, Continue, Cursor, Grok Build CLI, and other OpenAI-compatible clients):
   relay proxy
-  # then point the app's OpenAI base URL to http://127.0.0.1:8791/v1
+  # point the client's API base URL to http://127.0.0.1:8791/v1
 
 Getting started:
   relay init
@@ -108,7 +109,7 @@ Commands:
   (default)   Interactive terminal session for shared task memory.
   proxy       OpenAI-compatible proxy in front of 0G Router with Relay memory.
   task        Start, extend, and hand off a shared task across models.
-  to          Publish task memory to 0G Storage and hand off to Codex or another target.
+  to          Publish task memory to 0G Storage and hand off to another CLI target.
   capsule     Inspect, preview, publish, and fetch Context Capsules.
   status      Check local setup and live 0G connectivity.
   models      List models and probe API-key access with --allowed.
@@ -445,7 +446,8 @@ async function runProxyCommand(args, io) {
   io.stdout.write(`Relay proxy listening on ${listenUrl}/v1\n`);
   io.stdout.write(`Project memory: ${join(projectRoot, ".relay")}\n`);
   io.stdout.write(`Upstream Router: ${proxy.upstreamBaseUrl}\n`);
-  io.stdout.write("Point any OpenAI-compatible client here (Cline, Codex, custom apps).\n");
+  io.stdout.write("Client-agnostic: Claude Code, Codex, OpenCode, Cline, Aider, Continue, Cursor, Grok Build CLI, etc.\n");
+  io.stdout.write("Point any OpenAI-compatible CLI base URL here.\n");
   io.stdout.write("Optional headers: X-Relay-Goal, X-Relay-Mode, X-Relay-No-Handoff\n");
 
   await new Promise(() => {});
@@ -499,7 +501,7 @@ async function runHandoffToCommand(args, io) {
 
   if (result.target.external || result.target.reason === "no_inference_models_verified") {
     io.stdout.write(`Mode: storage + paste handoff (${result.target.label} is external)\n`);
-    io.stdout.write("Open the handoff file in Codex or Claude Code and continue from there.\n");
+    io.stdout.write("Open the handoff file in Claude Code, Codex, OpenCode, or another agent.\n");
   } else if (result.continueResult) {
     writeTaskInteractionOutput(io, result.continueResult);
   } else if (handoffOnly) {

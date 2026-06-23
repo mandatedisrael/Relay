@@ -46,7 +46,7 @@ function buildPortableHandoffMarkdown({
   const lines = [
     `# Relay portable handoff → ${target.label}`,
     "",
-    "Paste this into Codex, Claude Code, or another coding agent to continue the same task.",
+    "Paste this into Claude Code, Codex, OpenCode, or another coding CLI to continue the same task.",
     "",
     "## Task",
     `- Goal: ${capsule.task.goal}`,

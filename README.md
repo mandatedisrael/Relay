@@ -14,7 +14,7 @@ Relay passes **task state**, not chat history. That memory is a **Context Capsul
 
 - **Interactive terminal session** — chat in a `relay>` prompt with streaming responses and slash commands
 - **Model handoffs** — switch from a cheap model to a stronger one via capsule views (`compact`, `standard`, `deep`), not full transcript replay
-- **Proxy mode** — put Relay in front of 0G Router so Cline, Codex, or any OpenAI-compatible client gets automatic memory capture and handoff injection
+- **Proxy mode** — client-agnostic OpenAI-compatible proxy in front of 0G Router; works with popular coding CLIs that accept a custom API base URL (Claude Code, Codex, OpenCode, Cline, Aider, Continue, Cursor, Grok Build CLI, and others)
 - **Portable memory** — publish encrypted capsules to 0G Storage, fetch them later, and continue from verified state
 - **External agent bridges** — `relay to codex` or `relay to claude-code` publishes memory and writes a handoff file for another coding agent
 - **Live 0G integration** — Router model catalog, real completions with `x_0g_trace`, and mainnet storage publish/fetch
@@ -86,13 +86,27 @@ relay --model glm-5.1            # interactive with model set
 relay -p "one-shot query"        # print mode, then exit
 ```
 
-### 4. Use Relay behind Cline or Codex
+### 4. Use Relay behind your coding CLI
 
 ```sh
 relay proxy
 ```
 
-Point the app's OpenAI base URL to `http://127.0.0.1:8791/v1`. Relay forwards to 0G Router, captures each step, and injects capsule handoffs on later calls. Your inference key stays in Relay's `.env`.
+Relay is **client-agnostic**. Any tool that can point an OpenAI-compatible API base URL at Relay can use it:
+
+| CLI / client | Typical setup |
+|---|---|
+| **Claude Code** | Custom OpenAI-compatible base URL → `http://127.0.0.1:8791/v1` |
+| **Codex** | Same |
+| **OpenCode** | Same |
+| **Cline** | VS Code extension → OpenAI base URL override |
+| **Aider** | `--openai-api-base http://127.0.0.1:8791/v1` |
+| **Continue** | Custom OpenAI provider base URL |
+| **Cursor / Grok Build CLI** | Use if the client supports a custom OpenAI-compatible endpoint |
+
+Point the client's base URL to `http://127.0.0.1:8791/v1`. Relay forwards to 0G Router, captures each step, and injects capsule handoffs on later calls. Your inference key stays in Relay's `.env`.
+
+If a CLI only speaks a native vendor API (for example Anthropic-only) and cannot target a custom OpenAI base URL, use `relay` interactive or `relay to <target>` instead of proxy.
 
 ### 5. Hand off to another coding agent
 
@@ -101,7 +115,7 @@ relay to codex
 relay to claude-code --handoff-only
 ```
 
-This publishes encrypted memory to 0G Storage and writes a handoff file under `.relay/handoffs/`. Open that file in Codex or Claude Code to continue.
+This publishes encrypted memory to 0G Storage and writes a handoff file under `.relay/handoffs/`. Open that file in Claude Code, Codex, OpenCode, or another agent to continue.
 
 ## Context modes
 
