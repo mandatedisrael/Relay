@@ -32,7 +32,9 @@ export async function runModelSwitch({
   instruction,
   baseUrl,
   apiKey,
-  fetchImpl = globalThis.fetch
+  fetchImpl = globalThis.fetch,
+  stream = false,
+  onDelta
 }) {
   if (!model) {
     throw new Error("A target model ID is required.");
@@ -44,7 +46,9 @@ export async function runModelSwitch({
     apiKey,
     model,
     messages: prepared.messages,
-    fetchImpl
+    fetchImpl,
+    stream,
+    onDelta
   });
 
   const event = buildModelResponseEvent({

@@ -41,6 +41,7 @@ describe("Relay CLI", () => {
 
     const { stdout, stderr } = harness.output();
     assert.match(stdout, /Shared task memory for multi-model work/);
+    assert.match(stdout, /Interactive session \(default\)/);
     assert.match(stdout, /relay task start/);
     assert.equal(stderr, "");
   });

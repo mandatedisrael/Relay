@@ -25,7 +25,9 @@ export async function createChatCompletion({
   messages,
   fetchImpl = globalThis.fetch,
   verifyTee = false,
-  maxTokens
+  maxTokens,
+  stream = false,
+  onDelta
 } = {}) {
   if (!baseUrl) {
     throw new Error("0G Router base URL is required.");
@@ -43,20 +45,31 @@ export async function createChatCompletion({
     throw new Error("At least one chat message is required.");
   }
 
+  const requestBody = {
+    model,
+    messages,
+    verify_tee: verifyTee,
+    ...(stream ? { stream: true } : {}),
+    ...(Number.isInteger(maxTokens) && maxTokens > 0 ? { max_tokens: maxTokens } : {})
+  };
+
   const response = await fetchImpl(routerUrl(baseUrl, "chat/completions"), {
     method: "POST",
     headers: {
-      accept: "application/json",
+      accept: stream ? "text/event-stream" : "application/json",
       authorization: `Bearer ${apiKey}`,
       "content-type": "application/json"
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      verify_tee: verifyTee,
-      ...(Number.isInteger(maxTokens) && maxTokens > 0 ? { max_tokens: maxTokens } : {})
-    })
+    body: JSON.stringify(requestBody)
   });
+
+  if (stream && typeof onDelta === "function" && response.ok && response.body) {
+    try {
+      return await readSseChatCompletion(response, onDelta);
+    } catch {
+      // Fall back to a non-streaming request when the upstream stream is unavailable.
+    }
+  }
 
   const body = await readJsonResponse(response);
 
@@ -66,6 +79,112 @@ export async function createChatCompletion({
   }
 
   return parseChatCompletion(body);
+}
+
+export async function readSseChatCompletion(response, onDelta) {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let content = "";
+  let lastPayload = null;
+
+  for await (const chunk of response.body) {
+    buffer += decoder.decode(chunk, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith(":") || !trimmed.startsWith("data:")) {
+        continue;
+      }
+
+      const data = trimmed.slice(trimmed.startsWith("data: ") ? 6 : 5).trim();
+      if (!data || data === "[DONE]") {
+        continue;
+      }
+
+      const payload = JSON.parse(data);
+      lastPayload = mergeStreamPayload(lastPayload, payload);
+
+      const delta = payload.choices?.[0]?.delta?.content;
+      if (typeof delta === "string" && delta.length > 0) {
+        content += delta;
+        onDelta(delta);
+      }
+    }
+  }
+
+  if (!lastPayload) {
+    throw new Error("0G Router returned an empty streaming response.");
+  }
+
+  return parseChatCompletion(buildStreamCompletionBody(lastPayload, content));
+}
+
+function mergeStreamPayload(previous, next) {
+  if (!previous) {
+    return structuredClone(next);
+  }
+
+  const merged = structuredClone(previous);
+  const nextChoice = next.choices?.[0];
+  const mergedChoice = merged.choices?.[0] ?? { delta: {}, message: { role: "assistant", content: "" } };
+
+  if (nextChoice?.delta?.content) {
+    mergedChoice.delta = {
+      ...mergedChoice.delta,
+      content: `${mergedChoice.delta?.content ?? ""}${nextChoice.delta.content}`
+    };
+    mergedChoice.message = {
+      role: mergedChoice.message?.role ?? "assistant",
+      content: `${mergedChoice.message?.content ?? ""}${nextChoice.delta.content}`
+    };
+  }
+
+  if (nextChoice?.delta?.role) {
+    mergedChoice.delta = { ...mergedChoice.delta, role: nextChoice.delta.role };
+    mergedChoice.message = { ...mergedChoice.message, role: nextChoice.delta.role };
+  }
+
+  if (nextChoice?.finish_reason) {
+    mergedChoice.finish_reason = nextChoice.finish_reason;
+  }
+
+  merged.choices = [mergedChoice];
+
+  if (next.model) {
+    merged.model = next.model;
+  }
+
+  if (next.id) {
+    merged.id = next.id;
+  }
+
+  if (next.usage) {
+    merged.usage = next.usage;
+  }
+
+  if (next.x_0g_trace) {
+    merged.x_0g_trace = next.x_0g_trace;
+  }
+
+  return merged;
+}
+
+function buildStreamCompletionBody(payload, content) {
+  const choice = payload.choices?.[0] ?? {};
+  return {
+    ...payload,
+    choices: [
+      {
+        ...choice,
+        message: {
+          role: choice.message?.role ?? choice.delta?.role ?? "assistant",
+          content
+        }
+      }
+    ]
+  };
 }
 
 export function parseModelCatalog(body) {

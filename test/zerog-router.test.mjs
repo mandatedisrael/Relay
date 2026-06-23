@@ -4,7 +4,8 @@ import {
   createChatCompletion,
   fetchModelCatalog,
   parseChatCompletion,
-  parseModelCatalog
+  parseModelCatalog,
+  readSseChatCompletion
 } from "../src/zerog-router.mjs";
 
 describe("0G Router model catalog", () => {
@@ -149,6 +150,26 @@ describe("0G Router model catalog", () => {
         };
       }
     });
+  });
+
+  it("streams chat completion deltas and assembles the final response", async () => {
+    const deltas = [];
+    const completion = await readSseChatCompletion({
+      ok: true,
+      body: {
+        async *[Symbol.asyncIterator]() {
+          const encoder = new TextEncoder();
+          yield encoder.encode("data: {\"choices\":[{\"delta\":{\"content\":\"Hel\"}}]}\n\n");
+          yield encoder.encode("data: {\"choices\":[{\"delta\":{\"content\":\"lo\"}}],\"model\":\"example/model\",\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":2,\"total_tokens\":4},\"x_0g_trace\":{\"request_id\":\"req_stream\",\"provider\":\"0xabc\",\"billing\":{\"total_cost\":\"9\"}}}\n\n");
+          yield encoder.encode("data: [DONE]\n\n");
+        }
+      }
+    }, (delta) => deltas.push(delta));
+
+    assert.deepEqual(deltas, ["Hel", "lo"]);
+    assert.equal(completion.content, "Hello");
+    assert.equal(completion.trace.requestId, "req_stream");
+    assert.equal(completion.trace.billing.totalCost, "9");
   });
 
   it("parses Router chat completion trace metadata", () => {

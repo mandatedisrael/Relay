@@ -13,14 +13,18 @@ export async function startTask({
   message,
   baseUrl,
   apiKey,
-  fetchImpl
+  fetchImpl,
+  stream = false,
+  onDelta
 }) {
   const completion = await createChatCompletion({
     baseUrl,
     apiKey,
     model,
     messages: [{ role: "user", content: message }],
-    fetchImpl
+    fetchImpl,
+    stream,
+    onDelta
   });
 
   const event = buildModelResponseEvent({ completion, prompt: message });
@@ -52,7 +56,9 @@ export async function stepTask({
   mode = "standard",
   baseUrl,
   apiKey,
-  fetchImpl
+  fetchImpl,
+  stream = false,
+  onDelta
 }) {
   const result = await runModelSwitch({
     capsule,
@@ -62,7 +68,9 @@ export async function stepTask({
     instruction: message,
     baseUrl,
     apiKey,
-    fetchImpl
+    fetchImpl,
+    stream,
+    onDelta
   });
 
   await saveEvent(projectRoot, result.event);

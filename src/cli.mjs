@@ -21,9 +21,34 @@ import { runMvpProof, saveProofReport } from "./proof-run.mjs";
 import { handoffTaskToTarget } from "./handoff-to.mjs";
 import { createRelayRouterProxy, defaultEventsLoader } from "./router-proxy.mjs";
 import { ensureDefaultTargetsConfig } from "./targets-config.mjs";
+import {
+  isInteractiveLaunch,
+  parseInteractiveLaunchArgs,
+  runInteractiveSession,
+  runPrintCommand
+} from "./interactive.mjs";
 import { continueTask, startTask, stepTask } from "./task-runtime.mjs";
 import { buildTaskMemorySummary } from "./task-summary.mjs";
 import { CONTEXT_MODES } from "./protocol.mjs";
+
+const KNOWN_CLI_COMMANDS = new Set([
+  "status",
+  "demo",
+  "models",
+  "run",
+  "task",
+  "to",
+  "proxy",
+  "init",
+  "capsule",
+  "continue",
+  "chat",
+  "doctor",
+  "ask",
+  "switch",
+  "proof",
+  "e2e"
+]);
 
 const COMMAND_ALIASES = Object.freeze({
   doctor: "status",
@@ -41,20 +66,27 @@ const HELP_TEXT = `Relay
 
 Shared task memory for multi-model work on 0G.
 
+Interactive session (default):
+  relay
+  relay "explain this checkout failure"
+  relay -c
+  relay --model <model-id>
+  relay -p "one-shot query"
+
+Inside the session, type messages directly and use /help for slash commands.
+
 Use Relay anywhere an app talks to 0G Router (Cline, Codex, custom clients):
   relay proxy
   # then point the app's OpenAI base URL to http://127.0.0.1:8791/v1
 
-Relay captures each Router call, updates local task memory, and injects capsule
-handoffs automatically. No manual relay task step per message required.
-
 Getting started:
   relay init
+  relay
   relay proxy [--port 8791]
   relay status [--local]
   relay models --allowed
 
-Work on one task (CLI mode):
+Scripted task commands:
   relay task start --model <model-id> --goal "task" --message "first step"
   relay task step --message "next step on the same task"
   relay task continue --to <model-id> --mode compact --message "hand off to another model"
@@ -73,6 +105,7 @@ Verification:
   relay demo [--mode compact] [--skip-storage]
 
 Commands:
+  (default)   Interactive terminal session for shared task memory.
   proxy       OpenAI-compatible proxy in front of 0G Router with Relay memory.
   task        Start, extend, and hand off a shared task across models.
   to          Publish task memory to 0G Storage and hand off to Codex or another target.
@@ -88,7 +121,25 @@ Aliases:
 `;
 
 export async function runCli(args, io) {
-  const rawCommand = args[0] ?? "--help";
+  if (args.length === 0 || args[0] === "chat" || shouldLaunchInteractive(args)) {
+    const launchArgs = args[0] === "chat" ? args.slice(1) : args;
+    const launch = parseInteractiveLaunchArgs(launchArgs);
+
+    if (launch.print) {
+      await runPrintCommand(launch, io);
+      return;
+    }
+
+    if (args.length === 0 && io.isTTY === false) {
+      io.stdout.write(`${HELP_TEXT}\n`);
+      return;
+    }
+
+    await runInteractiveSession(launch, io);
+    return;
+  }
+
+  const rawCommand = args[0];
   const command = resolveCommandName(rawCommand);
 
   if (rawCommand === "--help" || rawCommand === "-h" || rawCommand === "help") {
@@ -166,6 +217,19 @@ export async function runCli(args, io) {
 
 function resolveCommandName(command) {
   return COMMAND_ALIASES[command] ?? command;
+}
+
+function shouldLaunchInteractive(args) {
+  const rawCommand = args[0];
+
+  if (rawCommand && !rawCommand.startsWith("-")) {
+    const command = resolveCommandName(rawCommand);
+    if (KNOWN_CLI_COMMANDS.has(command)) {
+      return false;
+    }
+  }
+
+  return isInteractiveLaunch(args);
 }
 
 function resolveCapsuleCommandName(subcommand) {

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { canonicalJson } from "./hash.mjs";
 
@@ -32,4 +32,15 @@ export async function saveActiveTask(projectRoot, task) {
   };
   await writeFile(activeTaskPath(projectRoot), canonicalJson(record), "utf8");
   return record;
+}
+
+export async function clearActiveTask(projectRoot) {
+  try {
+    await unlink(activeTaskPath(projectRoot));
+  } catch (error) {
+    if (error && typeof error === "object" && error.code === "ENOENT") {
+      return;
+    }
+    throw error;
+  }
 }
