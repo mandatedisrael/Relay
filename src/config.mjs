@@ -1,4 +1,4 @@
-export const DEFAULT_ROUTER_BASE_URL = "https://api.0g.ai";
+export const DEFAULT_ROUTER_BASE_URL = "https://router-api.0g.ai/v1";
 
 export function loadConfig(env) {
   return {
