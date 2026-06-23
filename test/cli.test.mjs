@@ -281,6 +281,96 @@ describe("Relay CLI", () => {
     assert.equal(eventFile.isFile(), true);
   });
 
+  it("publishes a capsule through the CLI with mocked 0G Storage", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const rootHash = `0x${"f".repeat(64)}`;
+    const harness = createIo({
+      OG_STORAGE_PRIVATE_KEY: "0x" + "2".repeat(64)
+    }, projectRoot);
+    harness.io.storageDeps = {
+      uploadEncryptedBytes: async () => ({
+        rootHash,
+        txHash: "0xtx_cli_publish"
+      })
+    };
+
+    await saveCapsule(projectRoot, sampleCapsule());
+
+    await runCli(["capsule", "publish", "--mode", "compact"], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /Published encrypted Context Capsule/);
+    assert.match(stdout, new RegExp(`Relay URL: relay://0g-storage/testnet/${rootHash}`));
+    assert.match(stdout, /Decryption key: 0x/);
+    assert.match(stdout, /Capsule ID: ctx_test_001/);
+    assert.equal(stderr, "");
+  });
+
+  it("fetches a published capsule through the CLI with mocked 0G Storage", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const rootHash = `0x${"e".repeat(64)}`;
+    const harness = createIo({}, projectRoot);
+    const bundle = {
+      schema: "relay.capsule-bundle.v1",
+      manifest: {
+        bundle_schema: "relay.capsule-bundle.v1",
+        created_at: "2026-06-23T10:01:00.000Z",
+        capsule_id: "ctx_test_001",
+        files: ["capsule.json", "events.jsonl", "handoff.md", "traces/"],
+        event_count: 0,
+        trace_count: 0,
+        content_hash: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      capsule: sampleCapsule(),
+      events: [],
+      traces: [],
+      handoff: "# Relay Context Capsule"
+    };
+
+    const { canonicalJson, sha256Digest } = await import("../src/hash.mjs");
+    bundle.manifest.content_hash = sha256Digest(canonicalJson({
+      capsule: bundle.capsule,
+      events: bundle.events,
+      traces: bundle.traces,
+      handoff: bundle.handoff
+    }));
+
+    harness.io.storageDeps = {
+      peekEncryptionHeader: async () => ({ version: 1 }),
+      downloadEncryptedBytes: async () => Buffer.from(canonicalJson(bundle), "utf8")
+    };
+
+    const { savePublishKey } = await import("../src/publish-keys.mjs");
+    await savePublishKey(projectRoot, {
+      root_hash: rootHash,
+      encryption: "aes256",
+      key_hex: "0x" + "3".repeat(64),
+      network: "testnet",
+      mode: "turbo",
+      relay_url: `relay://0g-storage/testnet/${rootHash}`,
+      capsule_id: "ctx_test_001"
+    });
+
+    await runCli(["capsule", "fetch", `relay://0g-storage/testnet/${rootHash}`], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /Fetched and validated encrypted Context Capsule/);
+    assert.match(stdout, /Proof verified: yes/);
+    assert.match(stdout, /Capsule ID: ctx_test_001/);
+    assert.equal(stderr, "");
+  });
+
+  it("fails clearly when publish is missing a storage private key", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({}, projectRoot);
+    await saveCapsule(projectRoot, sampleCapsule());
+
+    await assert.rejects(
+      () => runCli(["capsule", "publish"], harness.io),
+      /OG_STORAGE_PRIVATE_KEY/
+    );
+  });
+
   it("fails clearly when switch is missing --to", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
     const harness = createIo({ OG_INFERENCE_API_KEY: "sk-test" }, projectRoot);

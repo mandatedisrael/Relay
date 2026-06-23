@@ -33,7 +33,7 @@ The MVP is complete when a developer can:
 - [x] Never mark a model claim as verified unless Relay has evidence.
 - [ ] Show estimated token use before model switching.
 - [ ] Show actual Router billing after model calls when available.
-- [ ] Publish encrypted capsules to 0G Storage by default.
+- [x] Publish encrypted capsules to 0G Storage by default.
 - [ ] Avoid chain, DA, Agentic ID, and team sharing in the MVP.
 
 ## Phase 1: Project foundation
@@ -232,26 +232,26 @@ Done when:
 
 Make capsules portable.
 
-- [ ] Add capsule bundle format:
-  - [ ] `manifest.json`
-  - [ ] `capsule.json`
-  - [ ] `events.jsonl`
-  - [ ] `traces/`
-  - [ ] `handoff.md`
-- [ ] Add client-side encryption before upload.
-- [ ] Add 0G Storage upload.
-- [ ] Store returned root/hash metadata.
-- [ ] Add fetch/download by root.
-- [ ] Enable proof verification on download where supported.
-- [ ] Decrypt fetched capsule locally.
-- [ ] Validate fetched capsule.
+- [x] Add capsule bundle format:
+  - [x] `manifest.json`
+  - [x] `capsule.json`
+  - [x] `events.jsonl`
+  - [x] `traces/`
+  - [x] `handoff.md`
+- [x] Add client-side encryption before upload.
+- [x] Add 0G Storage upload.
+- [x] Store returned root/hash metadata.
+- [x] Add fetch/download by root.
+- [x] Enable proof verification on download where supported.
+- [x] Decrypt fetched capsule locally.
+- [x] Validate fetched capsule.
 
 Done when:
 
-- [ ] `relay capsule publish` uploads a real encrypted capsule to 0G Storage.
-- [ ] `relay capsule fetch <root>` downloads it.
-- [ ] Fetched capsule passes proof/decryption/validation.
-- [ ] The fetched capsule can be used for a model continuation.
+- [x] `relay capsule publish` uploads a real encrypted capsule to 0G Storage.
+- [x] `relay capsule fetch <root>` downloads it.
+- [x] Fetched capsule passes proof/decryption/validation.
+- [x] The fetched capsule can be used for a model continuation.
 
 ## Phase 10: Trust and privacy modes
 
@@ -348,7 +348,7 @@ Use this section to record completed milestones as the build advances.
 - Phase 6 progress: capsule update flow after each model step is implemented and tested.
 - [x] Phase 7 complete: compact/standard/deep views, token estimates, reduction preview, and `relay capsule view`.
 - [x] Phase 8 complete: `relay switch`, continuation prompt contract, transcript-independent handoff, capsule updates, and token savings reporting.
-- [ ] Phase 9 complete:
+- [x] Phase 9 complete: encrypted capsule bundles, 0G Storage publish/fetch, proof-verified download, and local key management.
 - [ ] Phase 10 complete:
 - [ ] Phase 11 complete:
 - [ ] Phase 12 complete:

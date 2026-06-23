@@ -1,4 +1,7 @@
 import { loadConfig } from "./config.mjs";
+import { fetchCapsuleBundle, importCapsuleBundle } from "./capsule-fetch.mjs";
+import { publishCapsuleBundle } from "./capsule-publish.mjs";
+import { loadStorageConfig } from "./storage-config.mjs";
 import { buildModelResponseEvent } from "./events.mjs";
 import {
   initializeLocalStore,
@@ -29,6 +32,8 @@ Usage:
   relay capsule list
   relay capsule inspect [capsule-id]
   relay capsule view --mode <compact|standard|deep> [capsule-id]
+  relay capsule publish [--mode standard] [capsule-id]
+  relay capsule fetch <relay-url-or-root> [--key <hex>]
   relay switch --to <model-id> --mode <compact|standard|deep> [--message "..."] [capsule-id]
 
 Commands:
@@ -37,7 +42,7 @@ Commands:
   models     List live 0G Router models.
   ask        Send one chat completion through 0G Router. Supports --goal for capsule.
   switch     Continue a task on another 0G model using a capsule view handoff.
-  capsule    Inspect, list, and build context views from local Context Capsules.
+  capsule    Inspect, publish, fetch, and build views from local Context Capsules.
 
 MVP commands coming next:
   relay run "<task>" --auto --mode standard
@@ -120,10 +125,7 @@ async function runAskCommand(args, io) {
   const goalIndex = args.indexOf("--goal");
   const model = modelIndex === -1 ? "" : args[modelIndex + 1];
   const explicitGoal = goalIndex === -1 ? null : args[goalIndex + 1];
-  const filtered = args.filter((_, index) =>
-    index !== modelIndex && index !== modelIndex + 1 &&
-    index !== goalIndex && index !== goalIndex + 1
-  );
+  const filtered = removeFlagValues(args, [modelIndex, goalIndex]);
   const message = filtered.join(" ").trim();
   const config = loadConfig(io.env);
 
@@ -206,6 +208,16 @@ async function runCapsuleCommand(args, io) {
     return;
   }
 
+  if (subcommand === "publish") {
+    await runCapsulePublishCommand(args.slice(1), projectRoot, io);
+    return;
+  }
+
+  if (subcommand === "fetch") {
+    await runCapsuleFetchCommand(args.slice(1), projectRoot, io);
+    return;
+  }
+
   io.stderr.write(`Unknown capsule command: ${subcommand}\n`);
   throw new Error("Command failed.");
 }
@@ -217,11 +229,7 @@ async function runSwitchCommand(args, io) {
   const targetModel = toIndex === -1 ? "" : args[toIndex + 1];
   const mode = modeIndex === -1 ? "" : args[modeIndex + 1];
   const instruction = messageIndex === -1 ? null : args[messageIndex + 1];
-  const filtered = args.filter((_, index) =>
-    index !== toIndex && index !== toIndex + 1 &&
-    index !== modeIndex && index !== modeIndex + 1 &&
-    index !== messageIndex && index !== messageIndex + 1
-  );
+  const filtered = removeFlagValues(args, [toIndex, modeIndex, messageIndex]);
   const capsuleId = parseOptionalCapsuleId(filtered);
   const projectRoot = io.cwd ?? process.cwd();
   const config = loadConfig(io.env);
@@ -293,13 +301,91 @@ async function runSwitchCommand(args, io) {
   }
 }
 
+async function runCapsulePublishCommand(args, projectRoot, io) {
+  const modeIndex = args.indexOf("--mode");
+  const mode = modeIndex === -1 ? "standard" : args[modeIndex + 1];
+  const filtered = removeFlagValues(args, [modeIndex]);
+  const capsuleId = parseOptionalCapsuleId(filtered);
+
+  if (!CONTEXT_MODES.includes(mode)) {
+    throw new Error(`Invalid context mode "${mode}". Choose one of: ${CONTEXT_MODES.join(", ")}.`);
+  }
+
+  const record = await readCapsule(projectRoot, capsuleId);
+  if (!record) {
+    io.stdout.write("No local Context Capsules found.\n");
+    return;
+  }
+
+  const storageConfig = loadStorageConfig(io.env);
+  if (!storageConfig.hasPrivateKey) {
+    throw new Error("OG_STORAGE_PRIVATE_KEY is required to publish capsules to 0G Storage.");
+  }
+
+  const events = await loadEventPayloads(projectRoot);
+  const result = await publishCapsuleBundle({
+    projectRoot,
+    capsule: record.payload,
+    events,
+    mode,
+    storageConfig,
+    deps: io.storageDeps
+  });
+
+  const capsuleRecord = await saveCapsule(projectRoot, result.updatedCapsule);
+  const viewRecord = await saveView(projectRoot, result.view);
+
+  io.stdout.write("Published encrypted Context Capsule to 0G Storage.\n");
+  io.stdout.write(`Relay URL: ${result.relayUrl}\n`);
+  io.stdout.write(`Root hash: ${result.upload.rootHash}\n`);
+  io.stdout.write(`Transaction: ${result.upload.txHash}\n`);
+  io.stdout.write(`Network: ${storageConfig.network}\n`);
+  io.stdout.write(`Storage mode: ${storageConfig.mode}\n`);
+  io.stdout.write(`Encryption: aes256\n`);
+  io.stdout.write(`Decryption key: ${result.keyHex}\n`);
+  io.stdout.write("Save the decryption key locally. Relay also stored it under .relay/publish-keys/.\n");
+  io.stdout.write(`Bundle hash: ${result.bundle.manifest.content_hash}\n`);
+  io.stdout.write(`View ID: ${result.view.view_id}\n`);
+  io.stdout.write(`View hash: ${viewRecord.content_hash}\n`);
+  io.stdout.write(`Capsule ID: ${result.updatedCapsule.capsule_id}\n`);
+  io.stdout.write(`Capsule hash: ${capsuleRecord.content_hash}\n`);
+}
+
+async function runCapsuleFetchCommand(args, projectRoot, io) {
+  const keyIndex = args.indexOf("--key");
+  const encryptionKeyHex = keyIndex === -1 ? null : args[keyIndex + 1];
+  const filtered = removeFlagValues(args, [keyIndex]);
+  const reference = filtered.find((arg) => !arg.startsWith("--"));
+
+  if (!reference) {
+    throw new Error("A relay storage URL or root hash is required.");
+  }
+
+  const fetched = await fetchCapsuleBundle({
+    projectRoot,
+    reference,
+    encryptionKeyHex,
+    env: io.env,
+    deps: io.storageDeps
+  });
+  const imported = await importCapsuleBundle(projectRoot, fetched.bundle);
+
+  io.stdout.write("Fetched and validated encrypted Context Capsule from 0G Storage.\n");
+  io.stdout.write(`Root hash: ${fetched.rootHash}\n`);
+  io.stdout.write(`Network: ${fetched.network}\n`);
+  io.stdout.write(`Proof verified: ${fetched.proofVerified ? "yes" : "no"}\n`);
+  io.stdout.write(`Capsule ID: ${fetched.bundle.capsule.capsule_id}\n`);
+  io.stdout.write(`Events imported: ${imported.eventRecords.length}\n`);
+  io.stdout.write(`Traces imported: ${imported.traceRecords.length}\n`);
+  io.stdout.write(`Capsule hash: ${imported.capsuleRecord.content_hash}\n`);
+  io.stdout.write(`Goal: ${fetched.bundle.capsule.task.goal}\n`);
+}
+
 async function runCapsuleViewCommand(args, projectRoot, io) {
   const modeIndex = args.indexOf("--mode");
   const jsonFlag = args.includes("--json");
   const mode = modeIndex === -1 ? "" : args[modeIndex + 1];
-  const filtered = args.filter((_, index) =>
-    index !== modeIndex && index !== modeIndex + 1 && args[index] !== "--json"
-  );
+  const filtered = removeFlagValues(args, [modeIndex], { alsoExclude: ["--json"] });
   const capsuleId = parseOptionalCapsuleId(filtered);
 
   if (!mode) {
@@ -367,4 +453,21 @@ async function loadEventPayloads(projectRoot) {
 
 function formatTokenCount(value) {
   return new Intl.NumberFormat("en-US").format(value);
+}
+
+function removeFlagValues(args, flagIndexes, { alsoExclude = [] } = {}) {
+  const excluded = new Set(
+    alsoExclude
+      .map((value) => args.indexOf(value))
+      .filter((index) => index !== -1)
+  );
+
+  for (const index of flagIndexes) {
+    if (index !== -1) {
+      excluded.add(index);
+      excluded.add(index + 1);
+    }
+  }
+
+  return args.filter((_, index) => !excluded.has(index));
 }
