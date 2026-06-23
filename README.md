@@ -107,23 +107,7 @@ Relay will support three handoff modes from the MVP:
 
 The goal is to avoid burning tokens on the full conversation when the next model only needs the current working state.
 
-## Current status
-
-Relay is at the architecture stage.
-
 The production design is documented in [architecture.md](./architecture.md).
-
-Next implementation milestone:
-
-1. Build the local Relay CLI.
-2. Read the live 0G model catalog.
-3. Run a real model call through 0G Router.
-4. Compile a real Context Capsule.
-5. Switch the capsule to another 0G model.
-6. Measure token savings versus full transcript replay.
-7. Publish an encrypted capsule to 0G Storage.
-
-No mock result should count as done. Relay should only claim what has been proven with real 0G calls and real storage.
 
 ## Product principle
 
@@ -138,4 +122,3 @@ Relay gives them a shared external memory layer that is:
 - and honest about uncertainty.
 
 That honesty is the product.
-
