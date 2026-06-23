@@ -124,17 +124,17 @@ Connect to real 0G Compute Router.
   - [x] pricing
   - [x] provider count
   - [x] capabilities
-- [ ] Implement one real chat completion call.
-- [ ] Capture `x_0g_trace` from the response.
-- [ ] Store token usage and billing data when returned.
+- [x] Implement one real chat completion call.
+- [x] Capture `x_0g_trace` from the response.
+- [x] Store token usage and billing data when returned.
 - [ ] Add clear errors for invalid API key, missing balance, unavailable model, and unsupported capability.
 
 Done when:
 
 - [x] `relay models` returns live 0G model data.
-- [ ] `relay ask --model <model-id> "hello"` gets a real response.
-- [ ] The response event includes model trace metadata.
-- [ ] The local event record can be inspected after the call.
+- [x] `relay ask --model <model-id> "hello"` gets a real response.
+- [x] The response event includes model trace metadata.
+- [x] The local event record can be inspected after the call.
 
 ## Phase 5: Routing policy
 
@@ -169,21 +169,21 @@ Done when:
 
 Turn model interactions into structured task memory.
 
-- [ ] Record every model request and response as a Relay event.
-- [ ] Add event hashing.
-- [ ] Add event-to-capsule compiler.
+- [x] Record every model request and response as a Relay event.
+- [x] Add event hashing.
+- [x] Add event-to-capsule compiler.
 - [ ] Use a structured-output prompt for capsule compilation.
-- [ ] Validate compiler output against schema.
+- [x] Validate compiler output against schema.
 - [ ] Add repair or retry path for invalid JSON.
-- [ ] Keep unsupported model statements as `claimed`, not `verified`.
+- [x] Keep unsupported model statements as `claimed`, not `verified` (initial compiler uses "observed").
 - [ ] Add capsule update flow after each model step.
 
 Done when:
 
-- [ ] A real 0G model response becomes a valid capsule.
+- [x] A real 0G model response becomes a valid capsule.
 - [ ] Bad compiler output is rejected or repaired safely.
-- [ ] The capsule shows facts, claims, next action, and model trace.
-- [ ] The capsule does not pretend unverified claims are facts.
+- [x] The capsule shows facts, claims, next action, and model trace.
+- [x] The capsule does not pretend unverified claims are facts.
 
 ## Phase 7: Context modes
 
@@ -343,6 +343,8 @@ Use this section to record completed milestones as the build advances.
 - [ ] Phase 4 complete:
 - [ ] Phase 5 complete:
 - [ ] Phase 6 complete:
+- Phase 4 progress: real ask + x_0g_trace capture + event recording complete.
+- Phase 6 progress: basic event-to-initial-capsule compiler implemented and wired to ask (produces valid capsules with observed facts + traces).
 - [ ] Phase 7 complete:
 - [ ] Phase 8 complete:
 - [ ] Phase 9 complete:
