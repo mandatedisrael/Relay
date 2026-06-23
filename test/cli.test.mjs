@@ -41,18 +41,19 @@ describe("Relay CLI", () => {
 
     const { stdout, stderr } = harness.output();
     assert.match(stdout, /Shared task context for 0G models/);
-    assert.match(stdout, /relay doctor/);
+    assert.match(stdout, /relay status/);
     assert.equal(stderr, "");
   });
 
-  it("runs doctor without requiring an inference key", async () => {
+  it("runs local status without requiring an inference key", async () => {
     const harness = createIo();
 
-    await runCli(["doctor"], harness.io);
+    await runCli(["status", "--local"], harness.io);
 
     const { stdout, stderr } = harness.output();
+    assert.match(stdout, /Relay status/);
     assert.match(stdout, /0G inference key: missing/);
-    assert.match(stdout, /Local checks passed/);
+    assert.match(stdout, /Local configuration checked/);
     assert.equal(stderr, "");
   });
 
@@ -271,7 +272,7 @@ describe("Relay CLI", () => {
     assert.equal(viewFile.isFile(), true);
   });
 
-  it("returns JSON output for capsule view when requested", async () => {
+  it("returns JSON output for capsule handoff when requested", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
     const harness = createIo({}, projectRoot);
     await saveCapsule(projectRoot, sampleCapsule());
@@ -331,7 +332,7 @@ describe("Relay CLI", () => {
 
     const { stdout, stderr } = harness.output();
     assert.match(stdout, /Continuing from the capsule/);
-    assert.match(stdout, /Switched to: example\/model-b/);
+    assert.match(stdout, /Continued on: example\/model-b/);
     assert.match(stdout, /Context mode: standard/);
     assert.match(stdout, /Transcript-independent: yes/);
     assert.match(stdout, /event_id: evt_req_switch_001/);
@@ -422,7 +423,7 @@ describe("Relay CLI", () => {
     assert.equal(stderr, "");
   });
 
-  it("runs live doctor checks when requested", async () => {
+  it("runs live status checks by default", async () => {
     const harness = createIo({}, process.cwd(), async (url) => ({
       ok: true,
       async json() {
@@ -440,7 +441,7 @@ describe("Relay CLI", () => {
       }
     }));
 
-    await runCli(["doctor", "--live"], harness.io);
+    await runCli(["status"], harness.io);
 
     const { stdout, stderr } = harness.output();
     assert.match(stdout, /Live checks:/);
@@ -448,7 +449,7 @@ describe("Relay CLI", () => {
     assert.equal(stderr, "");
   });
 
-  it("runs relay proof with mocked integrations", async () => {
+  it("runs relay demo with mocked integrations", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
     const harness = createIo({ OG_INFERENCE_API_KEY: "sk-proof" }, projectRoot);
     let calls = 0;
@@ -487,7 +488,7 @@ describe("Relay CLI", () => {
     };
 
     await runCli([
-      "proof",
+      "demo",
       "--skip-storage",
       "--model-a",
       "example/model-a",
@@ -496,7 +497,7 @@ describe("Relay CLI", () => {
     ], harness.io);
 
     const { stdout, stderr } = harness.output();
-    assert.match(stdout, /Relay MVP proof/);
+    assert.match(stdout, /Relay end-to-end demo/);
     assert.match(stdout, /Result: PASS/);
     assert.equal(stderr, "");
   });
@@ -534,7 +535,17 @@ describe("Relay CLI", () => {
     );
   });
 
-  it("fails clearly when capsule view is missing --mode", async () => {
+  it("accepts legacy command aliases", async () => {
+    const harness = createIo();
+
+    await runCli(["doctor", "--local"], harness.io);
+
+    const { stdout } = harness.output();
+    assert.match(stdout, /Relay status/);
+    assert.match(stdout, /Local configuration checked/);
+  });
+
+  it("fails clearly when capsule handoff is missing --mode", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
     const harness = createIo({}, projectRoot);
     await saveCapsule(projectRoot, sampleCapsule());

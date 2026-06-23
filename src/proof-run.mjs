@@ -65,7 +65,7 @@ export async function runMvpProof({
   }
 
   if (!doctor.router.hasInferenceKey) {
-    throw new Error("OG_INFERENCE_API_KEY is required for relay proof.");
+    throw new Error("OG_INFERENCE_API_KEY is required for relay demo.");
   }
 
   if (!skipStorage && !doctor.storage?.hasPrivateKey) {
@@ -239,7 +239,7 @@ export function selectProofModels(models, { modelA, modelB, allowedModelIds = nu
     const hint = allowed
       ? " Need at least two chat-capable models allowed for this API key. Run `relay models --allowed`."
       : "";
-    throw new Error(`Need at least two chat-capable 0G Router models for relay proof.${hint}`);
+    throw new Error(`Need at least two chat-capable 0G Router models for relay demo.${hint}`);
   }
 
   const resolvedA = modelA ?? eligible[0]?.id;

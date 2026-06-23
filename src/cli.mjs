@@ -22,57 +22,77 @@ import { runLiveDoctorChecks } from "./live-checks.mjs";
 import { runMvpProof, saveProofReport } from "./proof-run.mjs";
 import { CONTEXT_MODES } from "./protocol.mjs";
 
+const COMMAND_ALIASES = Object.freeze({
+  doctor: "status",
+  ask: "run",
+  switch: "continue",
+  proof: "demo",
+  e2e: "demo"
+});
+
+const CAPSULE_COMMAND_ALIASES = Object.freeze({
+  view: "handoff"
+});
+
 const HELP_TEXT = `Relay
 
 Shared task context for 0G models.
 
-Usage:
-  relay --help
+Getting started:
   relay init
-  relay doctor
+  relay status [--local]
   relay models [--allowed] [--json]
-  relay ask --model <model-id> [--goal "task description"] "message"
+
+Work on a task:
+  relay run --model <model-id> [--goal "task"] [--message "..."]
+  relay continue --to <model-id> --mode <compact|standard|deep> [--message "..."] [latest|capsule-id]
+
+Capsules:
   relay capsule list
-  relay capsule inspect [capsule-id]
-  relay capsule view --mode <compact|standard|deep> [capsule-id]
-  relay capsule publish [--mode standard] [capsule-id]
+  relay capsule inspect [latest|capsule-id]
+  relay capsule handoff --mode <compact|standard|deep> [latest|capsule-id]
+  relay capsule publish [--mode compact] [latest|capsule-id]
   relay capsule fetch <relay-url-or-root> [--key <hex>]
-  relay switch --to <model-id> --mode <compact|standard|deep> [--message "..."] [capsule-id]
-  relay doctor --live
-  relay proof [--model-a <id>] [--model-b <id>] [--mode standard] [--skip-storage]
+
+Verification:
+  relay demo [--mode compact] [--skip-storage] [--model-a <id>] [--model-b <id>] [--json]
 
 Commands:
-  init       Create local Relay runtime folders.
-  doctor     Check local setup. Use --live for 0G connectivity checks.
-  proof      Run the full live MVP proof loop and save a report.
-  models     List live 0G Router models. Use --allowed to probe your API key access.
-  ask        Send one chat completion through 0G Router. Supports --goal for capsule.
-  switch     Continue a task on another 0G model using a capsule view handoff.
-  capsule    Inspect, publish, fetch, and build views from local Context Capsules.
+  init        Create local Relay runtime folders.
+  status      Check setup and 0G connectivity. Use --local for config-only checks.
+  models      List live 0G Router models. Use --allowed to see what your API key can use.
+  run         Start or extend a task on a model and compile a Context Capsule.
+  continue    Hand the current capsule to another model without replaying the transcript.
+  demo        Run the full end-to-end Relay workflow and save a report.
+  capsule     List, inspect, hand off, publish, and fetch Context Capsules.
 
+Notes:
+  - Capsule arguments default to latest when omitted.
+  - Aliases still work: doctor, ask, switch, proof, and capsule view.
 
 `;
 
 export async function runCli(args, io) {
-  const command = args[0] ?? "--help";
+  const rawCommand = args[0] ?? "--help";
+  const command = resolveCommandName(rawCommand);
 
-  if (command === "--help" || command === "-h" || command === "help") {
+  if (rawCommand === "--help" || rawCommand === "-h" || rawCommand === "help") {
     io.stdout.write(`${HELP_TEXT}\n`);
     return;
   }
 
-  if (command === "--version" || command === "-v") {
+  if (rawCommand === "--version" || rawCommand === "-v") {
     io.stdout.write("0.1.0\n");
     return;
   }
 
-  if (command === "doctor") {
-    await runDoctorCommand(args.slice(1), io);
+  if (command === "status") {
+    await runStatusCommand(args.slice(1), io);
     return;
   }
 
-  if (command === "proof") {
-    await runProofCommand(args.slice(1), io);
+  if (command === "demo") {
+    await runDemoCommand(args.slice(1), io);
     return;
   }
 
@@ -81,8 +101,8 @@ export async function runCli(args, io) {
     return;
   }
 
-  if (command === "ask") {
-    await runAskCommand(args.slice(1), io);
+  if (command === "run") {
+    await runTaskCommand(args.slice(1), io);
     return;
   }
 
@@ -98,15 +118,23 @@ export async function runCli(args, io) {
     return;
   }
 
-  if (command === "switch") {
-    await runSwitchCommand(args.slice(1), io);
+  if (command === "continue") {
+    await runContinueCommand(args.slice(1), io);
     return;
   }
 
-  io.stderr.write(`Unknown command: ${command}\n\n`);
+  io.stderr.write(`Unknown command: ${rawCommand}\n\n`);
   io.stderr.write(HELP_TEXT);
   io.stderr.write("\n");
   throw new Error("Command failed.");
+}
+
+function resolveCommandName(command) {
+  return COMMAND_ALIASES[command] ?? command;
+}
+
+function resolveCapsuleCommandName(subcommand) {
+  return CAPSULE_COMMAND_ALIASES[subcommand] ?? subcommand;
 }
 
 async function runModelsCommand(args, io) {
@@ -178,16 +206,36 @@ function formatModelCatalogLine(model, { includeId = true } = {}) {
   return includeId ? `${model.id} | ${details}` : details;
 }
 
-async function runDoctorCommand(args, io) {
-  const live = args.includes("--live");
+async function runStatusCommand(args, io) {
+  const localOnly = args.includes("--local") && !args.includes("--live");
   const config = loadConfig(io.env);
+  let storageSummary = null;
 
-  io.stdout.write("Relay doctor\n");
+  try {
+    const storageConfig = loadStorageConfig(io.env);
+    storageSummary = {
+      network: storageConfig.network,
+      mode: storageConfig.mode,
+      hasPrivateKey: storageConfig.hasPrivateKey
+    };
+  } catch (error) {
+    storageSummary = { error: error.message };
+  }
+
+  io.stdout.write("Relay status\n");
   io.stdout.write(`0G Router base URL: ${config.routerBaseUrl}\n`);
   io.stdout.write(`0G inference key: ${config.hasInferenceKey ? "configured" : "missing"}\n`);
 
-  if (!live) {
-    io.stdout.write("Local checks passed. Run `relay doctor --live` to verify 0G connectivity.\n");
+  if (storageSummary?.error) {
+    io.stdout.write(`0G Storage config: invalid (${storageSummary.error})\n`);
+  } else if (storageSummary) {
+    io.stdout.write(`0G Storage network: ${storageSummary.network}\n`);
+    io.stdout.write(`0G Storage mode: ${storageSummary.mode}\n`);
+    io.stdout.write(`0G Storage private key: ${storageSummary.hasPrivateKey ? "configured" : "missing"}\n`);
+  }
+
+  if (localOnly) {
+    io.stdout.write("\nLocal configuration checked. Run `relay status` to verify live 0G connectivity.\n");
     return;
   }
 
@@ -198,15 +246,13 @@ async function runDoctorCommand(args, io) {
   }
 
   if (result.storage) {
-    io.stdout.write(`Storage network: ${result.storage.network}\n`);
-    io.stdout.write(`Storage mode: ${result.storage.mode}\n`);
     io.stdout.write(`Storage indexer: ${result.storage.indexerUrl}\n`);
   }
 
-  io.stdout.write(`\nReady for relay proof: ${result.readyForProof ? "yes" : "no"}\n`);
+  io.stdout.write(`\nReady for relay demo: ${result.readyForProof ? "yes" : "no"}\n`);
 }
 
-async function runProofCommand(args, io) {
+async function runDemoCommand(args, io) {
   const modelAIndex = args.indexOf("--model-a");
   const modelBIndex = args.indexOf("--model-b");
   const modeIndex = args.indexOf("--mode");
@@ -215,7 +261,7 @@ async function runProofCommand(args, io) {
   const skipStorage = args.includes("--skip-storage");
   const modelA = modelAIndex === -1 ? null : args[modelAIndex + 1];
   const modelB = modelBIndex === -1 ? null : args[modelBIndex + 1];
-  const mode = modeIndex === -1 ? "standard" : args[modeIndex + 1];
+  const mode = modeIndex === -1 ? "compact" : args[modeIndex + 1];
   const goal = goalIndex === -1 ? null : args[goalIndex + 1];
   const projectRoot = io.cwd ?? process.cwd();
 
@@ -239,12 +285,12 @@ async function runProofCommand(args, io) {
   if (jsonFlag) {
     io.stdout.write(`${JSON.stringify({ report, report_path: reportPath }, null, 2)}\n`);
     if (!report.all_passed) {
-      throw new Error("Relay MVP proof did not pass all steps.");
+      throw new Error("Relay end-to-end demo did not pass all steps.");
     }
     return;
   }
 
-  io.stdout.write("Relay MVP proof\n");
+  io.stdout.write("Relay end-to-end demo\n");
   io.stdout.write(`Goal: ${report.goal}\n`);
   io.stdout.write(`Mode: ${report.mode}\n`);
   if (report.models?.modelA && report.models?.modelB) {
@@ -268,22 +314,25 @@ async function runProofCommand(args, io) {
     io.stdout.write(`${step.ok ? "ok" : "fail"} ${step.name}\n`);
   }
 
-  io.stdout.write(`\nProof report: ${reportPath}\n`);
+  io.stdout.write(`\nDemo report: ${reportPath}\n`);
   io.stdout.write(`Result: ${report.all_passed ? "PASS" : "FAIL"}\n`);
 
   if (!report.all_passed) {
-    throw new Error("Relay MVP proof did not pass all steps.");
+    throw new Error("Relay end-to-end demo did not pass all steps.");
   }
 }
 
-async function runAskCommand(args, io) {
+async function runTaskCommand(args, io) {
   const modelIndex = args.indexOf("--model");
   const goalIndex = args.indexOf("--goal");
   const model = modelIndex === -1 ? "" : args[modelIndex + 1];
   const explicitGoal = goalIndex === -1 ? null : args[goalIndex + 1];
-  const filtered = removeFlagValues(args, [modelIndex, goalIndex]);
-  const message = filtered.join(" ").trim();
+  const message = parseTaskMessage(args, [modelIndex, goalIndex]);
   const config = loadConfig(io.env);
+
+  if (!model) {
+    throw new Error("--model is required with a 0G model ID.");
+  }
 
   const completion = await createChatCompletion({
     baseUrl: config.routerBaseUrl,
@@ -324,7 +373,7 @@ async function runAskCommand(args, io) {
 }
 
 async function runCapsuleCommand(args, io) {
-  const subcommand = args[0] ?? "list";
+  const subcommand = resolveCapsuleCommandName(args[0] ?? "list");
   const projectRoot = io.cwd ?? process.cwd();
 
   if (subcommand === "list") {
@@ -359,8 +408,8 @@ async function runCapsuleCommand(args, io) {
     return;
   }
 
-  if (subcommand === "view") {
-    await runCapsuleViewCommand(args.slice(1), projectRoot, io);
+  if (subcommand === "handoff") {
+    await runCapsuleHandoffCommand(args.slice(1), projectRoot, io);
     return;
   }
 
@@ -378,15 +427,17 @@ async function runCapsuleCommand(args, io) {
   throw new Error("Command failed.");
 }
 
-async function runSwitchCommand(args, io) {
+async function runContinueCommand(args, io) {
   const toIndex = args.indexOf("--to");
   const modeIndex = args.indexOf("--mode");
   const messageIndex = args.indexOf("--message");
   const targetModel = toIndex === -1 ? "" : args[toIndex + 1];
   const mode = modeIndex === -1 ? "" : args[modeIndex + 1];
-  const instruction = messageIndex === -1 ? null : args[messageIndex + 1];
   const filtered = removeFlagValues(args, [toIndex, modeIndex, messageIndex]);
-  const capsuleId = parseOptionalCapsuleId(filtered);
+  const { capsuleId, trailingMessage } = parseCapsuleTarget(filtered);
+  const instruction = messageIndex === -1
+    ? (trailingMessage || null)
+    : args[messageIndex + 1];
   const projectRoot = io.cwd ?? process.cwd();
   const config = loadConfig(io.env);
 
@@ -404,7 +455,7 @@ async function runSwitchCommand(args, io) {
 
   const record = await readCapsule(projectRoot, capsuleId);
   if (!record) {
-    io.stdout.write("No local Context Capsules found. Run relay ask first to create one.\n");
+    io.stdout.write("No local Context Capsules found. Run relay run first to create one.\n");
     return;
   }
 
@@ -425,7 +476,7 @@ async function runSwitchCommand(args, io) {
   const capsuleRecord = await saveCapsule(projectRoot, result.updatedCapsule);
 
   io.stdout.write(`${result.completion.content}\n`);
-  io.stdout.write(`\nSwitched to: ${targetModel}\n`);
+  io.stdout.write(`\nContinued on: ${targetModel}\n`);
   io.stdout.write(`Context mode: ${mode}\n`);
   io.stdout.write(`Estimated handoff: ${formatTokenCount(result.estimates.viewTokens)} tokens\n`);
   io.stdout.write(`Full event history: ${formatTokenCount(result.estimates.fullHistoryTokens)} tokens\n`);
@@ -459,7 +510,7 @@ async function runSwitchCommand(args, io) {
 
 async function runCapsulePublishCommand(args, projectRoot, io) {
   const modeIndex = args.indexOf("--mode");
-  const mode = modeIndex === -1 ? "standard" : args[modeIndex + 1];
+  const mode = modeIndex === -1 ? "compact" : args[modeIndex + 1];
   const filtered = removeFlagValues(args, [modeIndex]);
   const capsuleId = parseOptionalCapsuleId(filtered);
 
@@ -537,7 +588,7 @@ async function runCapsuleFetchCommand(args, projectRoot, io) {
   io.stdout.write(`Goal: ${fetched.bundle.capsule.task.goal}\n`);
 }
 
-async function runCapsuleViewCommand(args, projectRoot, io) {
+async function runCapsuleHandoffCommand(args, projectRoot, io) {
   const modeIndex = args.indexOf("--mode");
   const jsonFlag = args.includes("--json");
   const mode = modeIndex === -1 ? "" : args[modeIndex + 1];
@@ -595,8 +646,51 @@ async function runCapsuleViewCommand(args, projectRoot, io) {
 }
 
 function parseOptionalCapsuleId(args) {
-  const candidate = args.find((arg) => !arg.startsWith("--"));
-  return candidate ?? "latest";
+  return parseCapsuleTarget(args).capsuleId;
+}
+
+function parseCapsuleTarget(args) {
+  const positional = args.filter((arg) => !arg.startsWith("--"));
+
+  if (positional.length === 0) {
+    return { capsuleId: "latest", trailingMessage: null };
+  }
+
+  const first = positional[0];
+  if (isCapsuleReference(first)) {
+    return {
+      capsuleId: first,
+      trailingMessage: positional.slice(1).join(" ").trim() || null
+    };
+  }
+
+  return {
+    capsuleId: "latest",
+    trailingMessage: positional.join(" ").trim() || null
+  };
+}
+
+function isCapsuleReference(value) {
+  return value === "latest" || value.startsWith("ctx_");
+}
+
+function parseTaskMessage(args, flagIndexes) {
+  const messageIndex = args.indexOf("--message");
+  const indexes = [...flagIndexes];
+  if (messageIndex !== -1) {
+    indexes.push(messageIndex);
+  }
+
+  const filtered = removeFlagValues(args, indexes);
+  const message = messageIndex !== -1
+    ? args[messageIndex + 1]?.trim()
+    : filtered.join(" ").trim();
+
+  if (!message) {
+    throw new Error("A task message is required. Pass --message \"...\" or add it at the end of the command.");
+  }
+
+  return message;
 }
 
 async function loadEventPayloads(projectRoot) {
