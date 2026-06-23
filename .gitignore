@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+coverage/
+
+# Local env
+.env
+.env.*
+!.env.example
+
+# Relay local runtime data
+.relay/
+
+# OS/editor noise
+.DS_Store
+.idea/
+.vscode/
+
