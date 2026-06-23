@@ -1,0 +1,13 @@
+{
+  "schema": "relay.view.v1",
+  "view_id": "view_checkout_standard_001",
+  "source_capsule_id": "ctx_checkout_001",
+  "mode": "standard",
+  "estimated_tokens": 1200,
+  "sections": [
+    "goal",
+    "verified_facts",
+    "claimed_unverified",
+    "next_action"
+  ]
+}

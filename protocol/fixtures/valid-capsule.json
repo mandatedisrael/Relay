@@ -1,0 +1,67 @@
+{
+  "schema": "relay.context.v1",
+  "capsule_id": "ctx_checkout_001",
+  "parent_capsule_id": null,
+  "created_at": "2026-06-23T10:01:00.000Z",
+  "task": {
+    "goal": "Fix checkout failure",
+    "acceptance_criteria": [
+      "Checkout succeeds",
+      "Relevant tests pass"
+    ]
+  },
+  "state": {
+    "status": "in_progress",
+    "next_action": "Patch checkout/session.ts and rerun checkout.test.ts",
+    "blockers": []
+  },
+  "facts": [
+    {
+      "id": "fact_001",
+      "text": "checkout.test.ts fails before the fix",
+      "truth_state": "verified",
+      "evidence": [
+        "ev_001"
+      ]
+    }
+  ],
+  "claims": [
+    {
+      "id": "claim_001",
+      "text": "The likely root cause is missing refresh-token handling",
+      "truth_state": "claimed",
+      "evidence": []
+    }
+  ],
+  "decisions": [],
+  "evidence": [
+    {
+      "id": "ev_001",
+      "kind": "model_output",
+      "source_event": "evt_router_response_001",
+      "hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  ],
+  "model_trace": [
+    {
+      "model_id": "example/model",
+      "provider": "0x0000000000000000000000000000000000000000",
+      "request_id": "req_001",
+      "input_tokens": 128,
+      "output_tokens": 64,
+      "billing": {
+        "currency": "neuron",
+        "input_cost": "0.001",
+        "output_cost": "0.002",
+        "total_cost": "0.003"
+      },
+      "tee_verified": true
+    }
+  ],
+  "routing": {
+    "last_model": "example/model",
+    "recommended_next_step": "implementation",
+    "recommended_mode": "standard"
+  },
+  "storage": {}
+}

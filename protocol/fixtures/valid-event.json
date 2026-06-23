@@ -1,0 +1,30 @@
+{
+  "schema": "relay.event.v1",
+  "event_id": "evt_router_response_001",
+  "timestamp": "2026-06-23T10:00:00.000Z",
+  "kind": "model.response",
+  "source": {
+    "runtime": "0g-router",
+    "model_id": "example/model",
+    "provider": "0x0000000000000000000000000000000000000000",
+    "request_id": "req_001"
+  },
+  "trace": {
+    "model_id": "example/model",
+    "provider": "0x0000000000000000000000000000000000000000",
+    "request_id": "req_001",
+    "input_tokens": 128,
+    "output_tokens": 64,
+    "billing": {
+      "currency": "neuron",
+      "input_cost": "0.001",
+      "output_cost": "0.002",
+      "total_cost": "0.003"
+    },
+    "tee_verified": true
+  },
+  "payload": {
+    "text": "The failing test was observed."
+  },
+  "content_hash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+}

@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relay.dev/schemas/relay.event.v1.schema.json",
+  "title": "Relay Event v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "event_id",
+    "timestamp",
+    "kind",
+    "source",
+    "payload",
+    "content_hash"
+  ],
+  "properties": {
+    "schema": {
+      "const": "relay.event.v1"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^evt_[a-zA-Z0-9_-]+$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "user.requested",
+        "model.request",
+        "model.response",
+        "model.step.completed",
+        "capsule.compiled",
+        "capsule.validated",
+        "storage.published",
+        "storage.fetched"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtime"
+      ],
+      "properties": {
+        "runtime": {
+          "type": "string",
+          "enum": [
+            "relay",
+            "0g-router",
+            "0g-storage",
+            "local"
+          ]
+        },
+        "model_id": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        }
+      }
+    },
+    "trace": {
+      "$ref": "#/$defs/model_trace"
+    },
+    "payload": {
+      "type": "object"
+    },
+    "content_hash": {
+      "type": "string",
+      "pattern": "^sha256:[a-fA-F0-9]{64}$"
+    }
+  },
+  "$defs": {
+    "model_trace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model_id",
+        "provider",
+        "request_id",
+        "input_tokens",
+        "output_tokens",
+        "billing",
+        "tee_verified"
+      ],
+      "properties": {
+        "model_id": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "input_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "output_tokens": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "billing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "currency",
+            "input_cost",
+            "output_cost",
+            "total_cost"
+          ],
+          "properties": {
+            "currency": {
+              "type": "string"
+            },
+            "input_cost": {
+              "type": "string"
+            },
+            "output_cost": {
+              "type": "string"
+            },
+            "total_cost": {
+              "type": "string"
+            }
+          }
+        },
+        "tee_verified": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

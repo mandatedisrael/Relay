@@ -1,0 +1,32 @@
+{
+  "schema": "relay.context.v1",
+  "capsule_id": "ctx_checkout_invalid",
+  "parent_capsule_id": null,
+  "created_at": "2026-06-23T10:01:00.000Z",
+  "task": {
+    "goal": "Fix checkout failure"
+  },
+  "state": {
+    "status": "in_progress",
+    "next_action": "Rerun checkout.test.ts",
+    "blockers": []
+  },
+  "facts": [
+    {
+      "id": "fact_001",
+      "text": "checkout.test.ts passes",
+      "truth_state": "verified",
+      "evidence": []
+    }
+  ],
+  "claims": [],
+  "decisions": [],
+  "evidence": [],
+  "model_trace": [],
+  "routing": {
+    "last_model": null,
+    "recommended_next_step": "verification",
+    "recommended_mode": "compact"
+  },
+  "storage": {}
+}

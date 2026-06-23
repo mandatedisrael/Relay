@@ -1,0 +1,223 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://relay.dev/schemas/relay.context.v1.schema.json",
+  "title": "Relay Context Capsule v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "capsule_id",
+    "created_at",
+    "task",
+    "state",
+    "facts",
+    "claims",
+    "decisions",
+    "evidence",
+    "model_trace",
+    "routing"
+  ],
+  "properties": {
+    "schema": {
+      "const": "relay.context.v1"
+    },
+    "capsule_id": {
+      "type": "string",
+      "pattern": "^ctx_[a-zA-Z0-9_-]+$"
+    },
+    "parent_capsule_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^ctx_[a-zA-Z0-9_-]+$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "goal"
+      ],
+      "properties": {
+        "goal": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acceptance_criteria": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "next_action",
+        "blockers"
+      ],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "not_started",
+            "in_progress",
+            "blocked",
+            "complete"
+          ]
+        },
+        "next_action": {
+          "type": "string"
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/state_item"
+          }
+        }
+      }
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/state_item"
+      }
+    },
+    "claims": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/state_item"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/state_item"
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "model_trace": {
+      "type": "array",
+      "items": {
+        "$ref": "relay.event.v1.schema.json#/$defs/model_trace"
+      }
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "last_model",
+        "recommended_next_step",
+        "recommended_mode"
+      ],
+      "properties": {
+        "last_model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recommended_next_step": {
+          "type": "string"
+        },
+        "recommended_mode": {
+          "type": "string",
+          "enum": [
+            "compact",
+            "standard",
+            "deep"
+          ]
+        }
+      }
+    },
+    "storage": {
+      "type": "object"
+    }
+  },
+  "$defs": {
+    "truth_state": {
+      "type": "string",
+      "enum": [
+        "observed",
+        "verified",
+        "claimed",
+        "planned",
+        "failed",
+        "blocked",
+        "stale"
+      ]
+    },
+    "state_item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "text",
+        "truth_state",
+        "evidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "truth_state": {
+          "$ref": "#/$defs/truth_state"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "source_event",
+        "hash"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "model_output",
+            "tool_output",
+            "command_output",
+            "file_snapshot",
+            "storage_proof"
+          ]
+        },
+        "source_event": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^sha256:[a-fA-F0-9]{64}$"
+        }
+      }
+    }
+  }
+}
