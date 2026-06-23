@@ -1,4 +1,5 @@
 import { loadConfig } from "./config.mjs";
+import { initializeLocalStore } from "./local-store.mjs";
 
 const HELP_TEXT = `Relay
 
@@ -42,7 +43,9 @@ export async function runCli(args, io) {
   }
 
   if (command === "init") {
-    io.stdout.write("Relay local runtime will be initialized in the next build slice.\n");
+    const result = await initializeLocalStore(io.cwd ?? process.cwd());
+    io.stdout.write(`Relay initialized at ${result.root}\n`);
+    io.stdout.write("Created local folders for events, capsules, views, and traces.\n");
     return;
   }
 

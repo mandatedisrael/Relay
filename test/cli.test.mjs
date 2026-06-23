@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
+import { mkdtemp, stat } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it } from "node:test";
 import { runCli } from "../src/cli.mjs";
 import { DEFAULT_ROUTER_BASE_URL, loadConfig } from "../src/config.mjs";
 
-function createIo(env = {}) {
+function createIo(env = {}, cwd = process.cwd()) {
   let stdout = "";
   let stderr = "";
 
   return {
     io: {
+      cwd,
       env,
       stdout: {
         write(chunk) {
@@ -48,6 +52,22 @@ describe("Relay CLI", () => {
     assert.match(stdout, /0G inference key: missing/);
     assert.match(stdout, /Local checks passed/);
     assert.equal(stderr, "");
+  });
+
+  it("initializes local Relay runtime folders", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({}, projectRoot);
+
+    await runCli(["init"], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /Relay initialized at/);
+    assert.equal(stderr, "");
+
+    for (const directory of ["events", "capsules", "views", "traces"]) {
+      const folder = await stat(join(projectRoot, ".relay", directory));
+      assert.equal(folder.isDirectory(), true);
+    }
   });
 
   it("loads config from environment with safe defaults", () => {

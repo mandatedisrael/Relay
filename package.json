@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node ./bin/relay.mjs",
     "test": "node --test",
-    "lint": "node --check ./bin/relay.mjs && node --check ./src/cli.mjs && node --check ./src/config.mjs"
+    "lint": "node --check ./bin/relay.mjs && node --check ./src/cli.mjs && node --check ./src/config.mjs && node --check ./src/local-store.mjs && node --check ./test/cli.test.mjs"
   },
   "engines": {
     "node": ">=22"
