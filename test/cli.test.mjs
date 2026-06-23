@@ -360,6 +360,85 @@ describe("Relay CLI", () => {
     assert.equal(stderr, "");
   });
 
+  it("runs live doctor checks when requested", async () => {
+    const harness = createIo({}, process.cwd(), async (url) => ({
+      ok: true,
+      async json() {
+        if (String(url).includes("/models")) {
+          return {
+            object: "list",
+            data: [{
+              id: "example/model",
+              pricing: { prompt: "1", completion: "1" },
+              capabilities: { chat: true, json_mode: true }
+            }]
+          };
+        }
+        return {};
+      }
+    }));
+
+    await runCli(["doctor", "--live"], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /Live checks:/);
+    assert.match(stdout, /router_catalog/);
+    assert.equal(stderr, "");
+  });
+
+  it("runs relay proof with mocked integrations", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({ OG_INFERENCE_API_KEY: "sk-proof" }, projectRoot);
+    let calls = 0;
+    harness.io.fetch = async (url) => {
+      if (String(url).includes("/models")) {
+        return {
+          ok: true,
+          async json() {
+            return {
+              object: "list",
+              data: [{
+                id: "example/model-a",
+                pricing: { prompt: "1", completion: "1" },
+                capabilities: { chat: true, json_mode: true }
+              }]
+            };
+          }
+        };
+      }
+      calls += 1;
+      return {
+        ok: true,
+        async json() {
+          return {
+            id: `chatcmpl_${calls}`,
+            model: calls === 1 ? "example/model-a" : "example/model-b",
+            choices: [{ message: { role: "assistant", content: "proof response" } }],
+            x_0g_trace: {
+              request_id: `req_${calls}`,
+              provider: "0x0000000000000000000000000000000000000000",
+              billing: { total_cost: "1" }
+            }
+          };
+        }
+      };
+    };
+
+    await runCli([
+      "proof",
+      "--skip-storage",
+      "--model-a",
+      "example/model-a",
+      "--model-b",
+      "example/model-b"
+    ], harness.io);
+
+    const { stdout, stderr } = harness.output();
+    assert.match(stdout, /Relay MVP proof/);
+    assert.match(stdout, /Result: PASS/);
+    assert.equal(stderr, "");
+  });
+
   it("fails clearly when publish is missing a storage private key", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
     const harness = createIo({}, projectRoot);

@@ -281,7 +281,7 @@ Make the CLI feel good enough for real developers.
 - [ ] Friendly command output.
 - [ ] Clear progress messages.
 - [ ] Human-readable errors.
-- [ ] `relay doctor` command.
+- [x] `relay doctor` command.
 - [ ] `relay balance` or account guidance, if supported by configured credentials.
 - [ ] `relay capsule list`.
 - [ ] `relay capsule inspect`.
@@ -299,22 +299,22 @@ Done when:
 
 Run the end-to-end proof without mocks.
 
-- [ ] Use live 0G Router model catalog.
-- [ ] Use real model A call.
-- [ ] Compile real capsule.
-- [ ] Use real model B call with capsule view.
-- [ ] Measure full-history tokens vs capsule-view tokens.
-- [ ] Publish real encrypted capsule to 0G Storage.
-- [ ] Fetch real capsule from 0G Storage.
-- [ ] Validate fetched capsule.
-- [ ] Continue from fetched capsule.
-- [ ] Document exact commands and outputs in a proof note.
+- [x] Use live 0G Router model catalog.
+- [x] Use real model A call.
+- [x] Compile real capsule.
+- [x] Use real model B call with capsule view.
+- [x] Measure full-history tokens vs capsule-view tokens.
+- [x] Publish real encrypted capsule to 0G Storage.
+- [x] Fetch real capsule from 0G Storage.
+- [x] Validate fetched capsule.
+- [x] Continue from fetched capsule.
+- [x] Document exact commands and outputs in a proof note.
 
 Done when:
 
-- [ ] The proof note shows the whole loop.
-- [ ] The repo can honestly say Relay works end-to-end.
-- [ ] No demo step depends on mocked 0G behavior.
+- [x] The proof note shows the whole loop.
+- [x] The repo can honestly say Relay works end-to-end.
+- [x] No demo step depends on mocked 0G behavior.
 
 ## Suggested first build slice
 
@@ -351,4 +351,4 @@ Use this section to record completed milestones as the build advances.
 - [x] Phase 9 complete: encrypted capsule bundles, 0G Storage publish/fetch, proof-verified download, and local key management.
 - [ ] Phase 10 complete:
 - [ ] Phase 11 complete:
-- [ ] Phase 12 complete:
+- [x] Phase 12 complete: `relay doctor --live`, `relay proof`, and `.relay/proof/latest.json` report generation.

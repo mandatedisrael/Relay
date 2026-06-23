@@ -17,6 +17,8 @@ import { createChatCompletion, fetchModelCatalog } from "./zerog-router.mjs";
 import { createInitialCapsule } from "./capsule-compiler.mjs";
 import { buildContextView } from "./view-builder.mjs";
 import { runModelSwitch } from "./model-switch.mjs";
+import { runLiveDoctorChecks } from "./live-checks.mjs";
+import { runMvpProof, saveProofReport } from "./proof-run.mjs";
 import { CONTEXT_MODES } from "./protocol.mjs";
 
 const HELP_TEXT = `Relay
@@ -35,17 +37,19 @@ Usage:
   relay capsule publish [--mode standard] [capsule-id]
   relay capsule fetch <relay-url-or-root> [--key <hex>]
   relay switch --to <model-id> --mode <compact|standard|deep> [--message "..."] [capsule-id]
+  relay doctor --live
+  relay proof [--model-a <id>] [--model-b <id>] [--mode standard] [--skip-storage]
 
 Commands:
   init       Create local Relay runtime folders.
-  doctor     Check local setup without requiring secrets.
+  doctor     Check local setup. Use --live for 0G connectivity checks.
+  proof      Run the full live MVP proof loop and save a report.
   models     List live 0G Router models.
   ask        Send one chat completion through 0G Router. Supports --goal for capsule.
   switch     Continue a task on another 0G model using a capsule view handoff.
   capsule    Inspect, publish, fetch, and build views from local Context Capsules.
 
-MVP commands coming next:
-  relay run "<task>" --auto --mode standard
+
 `;
 
 export async function runCli(args, io) {
@@ -62,11 +66,12 @@ export async function runCli(args, io) {
   }
 
   if (command === "doctor") {
-    const config = loadConfig(io.env);
-    io.stdout.write("Relay doctor\n");
-    io.stdout.write(`0G Router base URL: ${config.routerBaseUrl}\n`);
-    io.stdout.write(`0G inference key: ${config.hasInferenceKey ? "configured" : "missing"}\n`);
-    io.stdout.write("Local checks passed. Network checks are not implemented yet.\n");
+    await runDoctorCommand(args.slice(1), io);
+    return;
+  }
+
+  if (command === "proof") {
+    await runProofCommand(args.slice(1), io);
     return;
   }
 
@@ -118,6 +123,104 @@ export async function runCli(args, io) {
   io.stderr.write(HELP_TEXT);
   io.stderr.write("\n");
   throw new Error("Command failed.");
+}
+
+async function runDoctorCommand(args, io) {
+  const live = args.includes("--live");
+  const config = loadConfig(io.env);
+
+  io.stdout.write("Relay doctor\n");
+  io.stdout.write(`0G Router base URL: ${config.routerBaseUrl}\n`);
+  io.stdout.write(`0G inference key: ${config.hasInferenceKey ? "configured" : "missing"}\n`);
+
+  if (!live) {
+    io.stdout.write("Local checks passed. Run `relay doctor --live` to verify 0G connectivity.\n");
+    return;
+  }
+
+  const result = await runLiveDoctorChecks({ env: io.env, fetchImpl: io.fetch });
+  io.stdout.write("\nLive checks:\n");
+  for (const check of result.checks) {
+    io.stdout.write(`${check.ok ? "ok" : "fail"} ${check.name}: ${check.detail}\n`);
+  }
+
+  if (result.storage) {
+    io.stdout.write(`Storage network: ${result.storage.network}\n`);
+    io.stdout.write(`Storage mode: ${result.storage.mode}\n`);
+    io.stdout.write(`Storage indexer: ${result.storage.indexerUrl}\n`);
+  }
+
+  io.stdout.write(`\nReady for relay proof: ${result.readyForProof ? "yes" : "no"}\n`);
+}
+
+async function runProofCommand(args, io) {
+  const modelAIndex = args.indexOf("--model-a");
+  const modelBIndex = args.indexOf("--model-b");
+  const modeIndex = args.indexOf("--mode");
+  const goalIndex = args.indexOf("--goal");
+  const jsonFlag = args.includes("--json");
+  const skipStorage = args.includes("--skip-storage");
+  const modelA = modelAIndex === -1 ? null : args[modelAIndex + 1];
+  const modelB = modelBIndex === -1 ? null : args[modelBIndex + 1];
+  const mode = modeIndex === -1 ? "standard" : args[modeIndex + 1];
+  const goal = goalIndex === -1 ? null : args[goalIndex + 1];
+  const projectRoot = io.cwd ?? process.cwd();
+
+  if (!CONTEXT_MODES.includes(mode)) {
+    throw new Error(`Invalid context mode "${mode}". Choose one of: ${CONTEXT_MODES.join(", ")}.`);
+  }
+
+  const report = await runMvpProof({
+    projectRoot,
+    env: io.env,
+    fetchImpl: io.fetch,
+    modelA,
+    modelB,
+    mode,
+    goal: goal ?? undefined,
+    skipStorage,
+    storageDeps: io.storageDeps
+  });
+  const reportPath = await saveProofReport(projectRoot, report);
+
+  if (jsonFlag) {
+    io.stdout.write(`${JSON.stringify({ report, report_path: reportPath }, null, 2)}\n`);
+    if (!report.all_passed) {
+      throw new Error("Relay MVP proof did not pass all steps.");
+    }
+    return;
+  }
+
+  io.stdout.write("Relay MVP proof\n");
+  io.stdout.write(`Goal: ${report.goal}\n`);
+  io.stdout.write(`Mode: ${report.mode}\n`);
+  if (report.models?.modelA && report.models?.modelB) {
+    io.stdout.write(`Model A: ${report.models.modelA}\n`);
+    io.stdout.write(`Model B: ${report.models.modelB}\n`);
+  }
+
+  if (report.token_proof) {
+    io.stdout.write(`Handoff tokens: ${formatTokenCount(report.token_proof.handoff_tokens)}\n`);
+    io.stdout.write(`Full history tokens: ${formatTokenCount(report.token_proof.full_history_tokens)}\n`);
+    io.stdout.write(`Context reduction: ${report.token_proof.reduction_percent ?? "unavailable"}%\n`);
+  }
+
+  if (report.storage) {
+    io.stdout.write(`Relay URL: ${report.storage.relay_url}\n`);
+    io.stdout.write(`Decryption key: ${report.storage.key_hex}\n`);
+  }
+
+  io.stdout.write("\nSteps:\n");
+  for (const step of report.steps) {
+    io.stdout.write(`${step.ok ? "ok" : "fail"} ${step.name}\n`);
+  }
+
+  io.stdout.write(`\nProof report: ${reportPath}\n`);
+  io.stdout.write(`Result: ${report.all_passed ? "PASS" : "FAIL"}\n`);
+
+  if (!report.all_passed) {
+    throw new Error("Relay MVP proof did not pass all steps.");
+  }
 }
 
 async function runAskCommand(args, io) {
