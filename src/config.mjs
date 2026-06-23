@@ -1,0 +1,8 @@
+export const DEFAULT_ROUTER_BASE_URL = "https://api.0g.ai";
+
+export function loadConfig(env) {
+  return {
+    routerBaseUrl: env.OG_ROUTER_BASE_URL || DEFAULT_ROUTER_BASE_URL,
+    hasInferenceKey: Boolean(env.OG_INFERENCE_API_KEY)
+  };
+}

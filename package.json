@@ -1,0 +1,26 @@
+{
+  "name": "@relay/context",
+  "version": "0.1.0",
+  "description": "Switch between 0G models without losing context or wasting tokens.",
+  "type": "module",
+  "private": false,
+  "license": "MIT",
+  "bin": {
+    "relay": "./bin/relay.mjs"
+  },
+  "scripts": {
+    "start": "node ./bin/relay.mjs",
+    "test": "node --test",
+    "lint": "node --check ./bin/relay.mjs && node --check ./src/cli.mjs && node --check ./src/config.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    "architecture.md",
+    "build_plan.md"
+  ]
+}
