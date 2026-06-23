@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { readActiveTask } from "./active-task.mjs";
 import { loadConfig } from "./config.mjs";
 import { fetchCapsuleBundle, importCapsuleBundle } from "./capsule-fetch.mjs";
@@ -18,6 +19,7 @@ import { buildContextView } from "./view-builder.mjs";
 import { runLiveDoctorChecks } from "./live-checks.mjs";
 import { runMvpProof, saveProofReport } from "./proof-run.mjs";
 import { handoffTaskToTarget } from "./handoff-to.mjs";
+import { createRelayRouterProxy, defaultEventsLoader } from "./router-proxy.mjs";
 import { ensureDefaultTargetsConfig } from "./targets-config.mjs";
 import { continueTask, startTask, stepTask } from "./task-runtime.mjs";
 import { buildTaskMemorySummary } from "./task-summary.mjs";
@@ -39,15 +41,20 @@ const HELP_TEXT = `Relay
 
 Shared task memory for multi-model work on 0G.
 
-Relay is not a chat wrapper. It keeps a living Context Capsule: goal, verified
-facts, claims, next action, and a compact handoff for the next model.
+Use Relay anywhere an app talks to 0G Router (Cline, Codex, custom clients):
+  relay proxy
+  # then point the app's OpenAI base URL to http://127.0.0.1:8791/v1
+
+Relay captures each Router call, updates local task memory, and injects capsule
+handoffs automatically. No manual relay task step per message required.
 
 Getting started:
   relay init
+  relay proxy [--port 8791]
   relay status [--local]
   relay models --allowed
 
-Work on one task:
+Work on one task (CLI mode):
   relay task start --model <model-id> --goal "task" --message "first step"
   relay task step --message "next step on the same task"
   relay task continue --to <model-id> --mode compact --message "hand off to another model"
@@ -66,6 +73,7 @@ Verification:
   relay demo [--mode compact] [--skip-storage]
 
 Commands:
+  proxy       OpenAI-compatible proxy in front of 0G Router with Relay memory.
   task        Start, extend, and hand off a shared task across models.
   to          Publish task memory to 0G Storage and hand off to Codex or another target.
   capsule     Inspect, preview, publish, and fetch Context Capsules.
@@ -120,6 +128,11 @@ export async function runCli(args, io) {
 
   if (command === "to") {
     await runHandoffToCommand(args.slice(1), io);
+    return;
+  }
+
+  if (command === "proxy") {
+    await runProxyCommand(args.slice(1), io);
     return;
   }
 
@@ -342,6 +355,36 @@ async function runDemoCommand(args, io) {
   if (!report.all_passed) {
     throw new Error("Relay end-to-end demo did not pass all steps.");
   }
+}
+
+async function runProxyCommand(args, io) {
+  const portIndex = args.indexOf("--port");
+  const hostIndex = args.indexOf("--host");
+  const port = portIndex === -1 ? 8791 : Number(args[portIndex + 1]);
+  const host = hostIndex === -1 ? "127.0.0.1" : args[hostIndex + 1];
+  const projectRoot = io.env.RELAY_PROJECT_ROOT ?? io.cwd ?? process.cwd();
+
+  if (!Number.isInteger(port) || port <= 0) {
+    throw new Error("Invalid --port value for relay proxy.");
+  }
+
+  const proxy = createRelayRouterProxy({
+    projectRoot,
+    env: io.env,
+    host,
+    port,
+    fetchImpl: io.fetch,
+    eventsLoader: defaultEventsLoader
+  });
+
+  const listenUrl = await proxy.start();
+  io.stdout.write(`Relay proxy listening on ${listenUrl}/v1\n`);
+  io.stdout.write(`Project memory: ${join(projectRoot, ".relay")}\n`);
+  io.stdout.write(`Upstream Router: ${proxy.upstreamBaseUrl}\n`);
+  io.stdout.write("Point any OpenAI-compatible client here (Cline, Codex, custom apps).\n");
+  io.stdout.write("Optional headers: X-Relay-Goal, X-Relay-Mode, X-Relay-No-Handoff\n");
+
+  await new Promise(() => {});
 }
 
 async function runHandoffToCommand(args, io) {
