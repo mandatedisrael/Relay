@@ -1,8 +1,8 @@
+import { readActiveTask } from "./active-task.mjs";
 import { loadConfig } from "./config.mjs";
 import { fetchCapsuleBundle, importCapsuleBundle } from "./capsule-fetch.mjs";
 import { publishCapsuleBundle } from "./capsule-publish.mjs";
 import { loadStorageConfig } from "./storage-config.mjs";
-import { buildModelResponseEvent } from "./events.mjs";
 import {
   initializeLocalStore,
   listCapsules,
@@ -10,16 +10,15 @@ import {
   readCapsule,
   readEvent,
   saveCapsule,
-  saveEvent,
   saveView
 } from "./local-store.mjs";
 import { formatModelAccessReason, probeModelAccess } from "./model-access.mjs";
-import { createChatCompletion, fetchModelCatalog } from "./zerog-router.mjs";
-import { createInitialCapsule } from "./capsule-compiler.mjs";
+import { fetchModelCatalog } from "./zerog-router.mjs";
 import { buildContextView } from "./view-builder.mjs";
-import { runModelSwitch } from "./model-switch.mjs";
 import { runLiveDoctorChecks } from "./live-checks.mjs";
 import { runMvpProof, saveProofReport } from "./proof-run.mjs";
+import { continueTask, startTask, stepTask } from "./task-runtime.mjs";
+import { buildTaskMemorySummary } from "./task-summary.mjs";
 import { CONTEXT_MODES } from "./protocol.mjs";
 
 const COMMAND_ALIASES = Object.freeze({
@@ -36,39 +35,40 @@ const CAPSULE_COMMAND_ALIASES = Object.freeze({
 
 const HELP_TEXT = `Relay
 
-Shared task context for 0G models.
+Shared task memory for multi-model work on 0G.
+
+Relay is not a chat wrapper. It keeps a living Context Capsule: goal, verified
+facts, claims, next action, and a compact handoff for the next model.
 
 Getting started:
   relay init
   relay status [--local]
-  relay models [--allowed] [--json]
+  relay models --allowed
 
-Work on a task:
-  relay run --model <model-id> [--goal "task"] [--message "..."]
-  relay continue --to <model-id> --mode <compact|standard|deep> [--message "..."] [latest|capsule-id]
+Work on one task:
+  relay task start --model <model-id> --goal "task" --message "first step"
+  relay task step --message "next step on the same task"
+  relay task continue --to <model-id> --mode compact --message "hand off to another model"
+  relay task status
 
-Capsules:
-  relay capsule list
-  relay capsule inspect [latest|capsule-id]
-  relay capsule handoff --mode <compact|standard|deep> [latest|capsule-id]
-  relay capsule publish [--mode compact] [latest|capsule-id]
-  relay capsule fetch <relay-url-or-root> [--key <hex>]
+Portable memory:
+  relay capsule handoff --mode compact
+  relay capsule publish
+  relay capsule fetch <relay-url-or-root>
 
 Verification:
-  relay demo [--mode compact] [--skip-storage] [--model-a <id>] [--model-b <id>] [--json]
+  relay demo [--mode compact] [--skip-storage]
 
 Commands:
-  init        Create local Relay runtime folders.
-  status      Check setup and 0G connectivity. Use --local for config-only checks.
-  models      List live 0G Router models. Use --allowed to see what your API key can use.
-  run         Start or extend a task on a model and compile a Context Capsule.
-  continue    Hand the current capsule to another model without replaying the transcript.
-  demo        Run the full end-to-end Relay workflow and save a report.
-  capsule     List, inspect, hand off, publish, and fetch Context Capsules.
+  task        Start, extend, and hand off a shared task across models.
+  capsule     Inspect, preview, publish, and fetch Context Capsules.
+  status      Check local setup and live 0G connectivity.
+  models      List models and probe API-key access with --allowed.
+  demo        Run the full Relay workflow and save a report.
 
-Notes:
-  - Capsule arguments default to latest when omitted.
-  - Aliases still work: doctor, ask, switch, proof, and capsule view.
+Aliases:
+  run -> task start | continue -> task continue | ask -> run
+  doctor -> status | proof -> demo | capsule view -> capsule handoff
 
 `;
 
@@ -102,7 +102,12 @@ export async function runCli(args, io) {
   }
 
   if (command === "run") {
-    await runTaskCommand(args.slice(1), io);
+    await runTaskWorkflowCommand("start", args.slice(1), io);
+    return;
+  }
+
+  if (command === "task") {
+    await runTaskWorkflowCommand(args[1] ?? "status", args.slice(2), io);
     return;
   }
 
@@ -119,7 +124,7 @@ export async function runCli(args, io) {
   }
 
   if (command === "continue") {
-    await runContinueCommand(args.slice(1), io);
+    await runTaskWorkflowCommand("continue", args.slice(1), io);
     return;
   }
 
@@ -322,54 +327,161 @@ async function runDemoCommand(args, io) {
   }
 }
 
-async function runTaskCommand(args, io) {
-  const modelIndex = args.indexOf("--model");
-  const goalIndex = args.indexOf("--goal");
-  const model = modelIndex === -1 ? "" : args[modelIndex + 1];
-  const explicitGoal = goalIndex === -1 ? null : args[goalIndex + 1];
-  const message = parseTaskMessage(args, [modelIndex, goalIndex]);
+async function runTaskWorkflowCommand(subcommand, args, io) {
+  const projectRoot = io.cwd ?? process.cwd();
   const config = loadConfig(io.env);
 
-  if (!model) {
-    throw new Error("--model is required with a 0G model ID.");
+  if (subcommand === "status") {
+    await runTaskStatusCommand(projectRoot, io);
+    return;
   }
 
-  const completion = await createChatCompletion({
-    baseUrl: config.routerBaseUrl,
-    apiKey: config.inferenceApiKey,
-    model,
-    messages: [
-      {
-        role: "user",
-        content: message
-      }
-    ],
-    fetchImpl: io.fetch
+  if (subcommand === "start") {
+    const modelIndex = args.indexOf("--model");
+    const goalIndex = args.indexOf("--goal");
+    const model = modelIndex === -1 ? "" : args[modelIndex + 1];
+    const goal = goalIndex === -1 ? null : args[goalIndex + 1];
+    const message = parseTaskMessage(args, [modelIndex, goalIndex]);
+
+    if (!model) {
+      throw new Error("--model is required to start a Relay task.");
+    }
+
+    const result = await startTask({
+      projectRoot,
+      model,
+      goal,
+      message,
+      baseUrl: config.routerBaseUrl,
+      apiKey: config.inferenceApiKey,
+      fetchImpl: io.fetch
+    });
+    writeTaskInteractionOutput(io, result);
+    return;
+  }
+
+  if (subcommand === "step") {
+    const modelIndex = args.indexOf("--model");
+    const modeIndex = args.indexOf("--mode");
+    const modelOverride = modelIndex === -1 ? null : args[modelIndex + 1];
+    const mode = modeIndex === -1 ? "standard" : args[modeIndex + 1];
+    const message = parseTaskMessage(args, [modelIndex, modeIndex]);
+    const activeTask = await readActiveTask(projectRoot);
+
+    if (!activeTask) {
+      throw new Error("No active Relay task found. Start one with `relay task start`.");
+    }
+
+    if (!CONTEXT_MODES.includes(mode)) {
+      throw new Error(`Invalid context mode "${mode}". Choose one of: ${CONTEXT_MODES.join(", ")}.`);
+    }
+
+    const record = await readCapsule(projectRoot, activeTask.capsule_id);
+    if (!record) {
+      throw new Error(`Active task capsule not found: ${activeTask.capsule_id}`);
+    }
+
+    const model = modelOverride ?? activeTask.last_model;
+    if (!model) {
+      throw new Error("--model is required when the active task has no last model recorded.");
+    }
+
+    const events = await loadEventPayloads(projectRoot);
+    const result = await stepTask({
+      projectRoot,
+      capsule: record.payload,
+      events,
+      model,
+      message,
+      mode,
+      baseUrl: config.routerBaseUrl,
+      apiKey: config.inferenceApiKey,
+      fetchImpl: io.fetch
+    });
+    writeTaskInteractionOutput(io, result);
+    return;
+  }
+
+  if (subcommand === "continue") {
+    const toIndex = args.indexOf("--to");
+    const modeIndex = args.indexOf("--mode");
+    const messageIndex = args.indexOf("--message");
+    const targetModel = toIndex === -1 ? "" : args[toIndex + 1];
+    const mode = modeIndex === -1 ? "compact" : args[modeIndex + 1];
+    const filtered = removeFlagValues(args, [toIndex, modeIndex, messageIndex]);
+    const { capsuleId, trailingMessage } = parseCapsuleTarget(filtered);
+    const instruction = messageIndex === -1
+      ? (trailingMessage || null)
+      : args[messageIndex + 1];
+
+    if (!targetModel) {
+      throw new Error("--to is required with the next model ID.");
+    }
+
+    if (!CONTEXT_MODES.includes(mode)) {
+      throw new Error(`Invalid context mode "${mode}". Choose one of: ${CONTEXT_MODES.join(", ")}.`);
+    }
+
+    const record = await readCapsule(projectRoot, capsuleId);
+    if (!record) {
+      io.stdout.write("No local Context Capsules found. Run `relay task start` first.\n");
+      return;
+    }
+
+    const events = await loadEventPayloads(projectRoot);
+    const result = await continueTask({
+      projectRoot,
+      capsule: record.payload,
+      events,
+      targetModel,
+      message: instruction,
+      mode,
+      baseUrl: config.routerBaseUrl,
+      apiKey: config.inferenceApiKey,
+      fetchImpl: io.fetch
+    });
+    writeTaskInteractionOutput(io, result);
+    return;
+  }
+
+  io.stderr.write(`Unknown task command: ${subcommand}\n`);
+  throw new Error("Command failed.");
+}
+
+async function runTaskStatusCommand(projectRoot, io) {
+  const activeTask = await readActiveTask(projectRoot);
+  if (!activeTask) {
+    io.stdout.write("No active Relay task.\n");
+    io.stdout.write("Start one with: relay task start --model <model-id> --goal \"...\" --message \"...\"\n");
+    return;
+  }
+
+  const record = await readCapsule(projectRoot, activeTask.capsule_id);
+  if (!record) {
+    io.stdout.write(`Active task capsule is missing: ${activeTask.capsule_id}\n`);
+    return;
+  }
+
+  const events = await loadEventPayloads(projectRoot);
+  const summary = buildTaskMemorySummary({
+    capsule: record.payload,
+    events,
+    mode: "compact",
+    model: activeTask.last_model
   });
-  const projectRoot = io.cwd ?? process.cwd();
-  const event = buildModelResponseEvent({ completion, prompt: message });
-  const eventRecord = await saveEvent(projectRoot, event);
 
-  const capsule = createInitialCapsule({ goal: explicitGoal || message, event });
-  const capsuleRecord = await saveCapsule(projectRoot, capsule);
+  io.stdout.write("Active Relay task\n");
+  io.stdout.write(`${summary.text}\n`);
+}
 
-  io.stdout.write(`${completion.content}\n`);
-  io.stdout.write(`\nevent_id: ${event.event_id}\n`);
-  io.stdout.write(`event_hash: ${eventRecord.content_hash}\n`);
+function writeTaskInteractionOutput(io, result) {
+  io.stdout.write("--- Model response ---\n");
+  io.stdout.write(`${result.completion.content}\n\n`);
+  io.stdout.write(`${result.summary.text}\n`);
 
-  if (completion.trace.requestId) {
-    io.stdout.write(`request_id: ${completion.trace.requestId}\n`);
+  if (result.completion.trace.billing.totalCost) {
+    io.stdout.write(`\nRouter billing: ${result.completion.trace.billing.totalCost} neuron\n`);
   }
-
-  if (completion.trace.provider) {
-    io.stdout.write(`provider: ${completion.trace.provider}\n`);
-  }
-
-  if (completion.trace.billing.totalCost) {
-    io.stdout.write(`total_cost: ${completion.trace.billing.totalCost} neuron\n`);
-  }
-
-  io.stdout.write(`capsule_id: ${capsule.capsule_id}\n`);
 }
 
 async function runCapsuleCommand(args, io) {
@@ -425,87 +537,6 @@ async function runCapsuleCommand(args, io) {
 
   io.stderr.write(`Unknown capsule command: ${subcommand}\n`);
   throw new Error("Command failed.");
-}
-
-async function runContinueCommand(args, io) {
-  const toIndex = args.indexOf("--to");
-  const modeIndex = args.indexOf("--mode");
-  const messageIndex = args.indexOf("--message");
-  const targetModel = toIndex === -1 ? "" : args[toIndex + 1];
-  const mode = modeIndex === -1 ? "" : args[modeIndex + 1];
-  const filtered = removeFlagValues(args, [toIndex, modeIndex, messageIndex]);
-  const { capsuleId, trailingMessage } = parseCapsuleTarget(filtered);
-  const instruction = messageIndex === -1
-    ? (trailingMessage || null)
-    : args[messageIndex + 1];
-  const projectRoot = io.cwd ?? process.cwd();
-  const config = loadConfig(io.env);
-
-  if (!targetModel) {
-    throw new Error("--to is required with a target 0G model ID.");
-  }
-
-  if (!mode) {
-    throw new Error(`--mode is required. Choose one of: ${CONTEXT_MODES.join(", ")}.`);
-  }
-
-  if (!CONTEXT_MODES.includes(mode)) {
-    throw new Error(`Invalid context mode "${mode}". Choose one of: ${CONTEXT_MODES.join(", ")}.`);
-  }
-
-  const record = await readCapsule(projectRoot, capsuleId);
-  if (!record) {
-    io.stdout.write("No local Context Capsules found. Run relay run first to create one.\n");
-    return;
-  }
-
-  const events = await loadEventPayloads(projectRoot);
-  const result = await runModelSwitch({
-    capsule: record.payload,
-    mode,
-    events,
-    model: targetModel,
-    instruction,
-    baseUrl: config.routerBaseUrl,
-    apiKey: config.inferenceApiKey,
-    fetchImpl: io.fetch
-  });
-
-  const eventRecord = await saveEvent(projectRoot, result.event);
-  const viewRecord = await saveView(projectRoot, result.view);
-  const capsuleRecord = await saveCapsule(projectRoot, result.updatedCapsule);
-
-  io.stdout.write(`${result.completion.content}\n`);
-  io.stdout.write(`\nContinued on: ${targetModel}\n`);
-  io.stdout.write(`Context mode: ${mode}\n`);
-  io.stdout.write(`Estimated handoff: ${formatTokenCount(result.estimates.viewTokens)} tokens\n`);
-  io.stdout.write(`Full event history: ${formatTokenCount(result.estimates.fullHistoryTokens)} tokens\n`);
-
-  if (result.estimates.reductionPercent === null) {
-    io.stdout.write("Estimated context reduction: unavailable\n");
-  } else {
-    io.stdout.write(`Estimated context reduction: ${result.estimates.reductionPercent}%\n`);
-  }
-
-  io.stdout.write("Transcript-independent: yes\n");
-  io.stdout.write(`event_id: ${result.event.event_id}\n`);
-  io.stdout.write(`event_hash: ${eventRecord.content_hash}\n`);
-  io.stdout.write(`view_id: ${result.view.view_id}\n`);
-  io.stdout.write(`view_hash: ${viewRecord.content_hash}\n`);
-  io.stdout.write(`capsule_id: ${result.updatedCapsule.capsule_id}\n`);
-  io.stdout.write(`capsule_hash: ${capsuleRecord.content_hash}\n`);
-
-  if (result.completion.trace.requestId) {
-    io.stdout.write(`request_id: ${result.completion.trace.requestId}\n`);
-  }
-
-  if (result.completion.trace.provider) {
-    io.stdout.write(`provider: ${result.completion.trace.provider}\n`);
-  }
-
-  if (result.completion.trace.billing.totalCost) {
-    io.stdout.write(`total_cost: ${result.completion.trace.billing.totalCost} neuron\n`);
-  }
 }
 
 async function runCapsulePublishCommand(args, projectRoot, io) {

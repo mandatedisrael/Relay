@@ -40,8 +40,8 @@ describe("Relay CLI", () => {
     await runCli(["--help"], harness.io);
 
     const { stdout, stderr } = harness.output();
-    assert.match(stdout, /Shared task context for 0G models/);
-    assert.match(stdout, /relay status/);
+    assert.match(stdout, /Shared task memory for multi-model work/);
+    assert.match(stdout, /relay task start/);
     assert.equal(stderr, "");
   });
 
@@ -195,17 +195,16 @@ describe("Relay CLI", () => {
     await runCli(["ask", "--model", "example/model", "--goal", "Test goal via flag", "hello"], harness.io);
 
     const { stdout, stderr } = harness.output();
+    assert.match(stdout, /--- Model response ---/);
     assert.match(stdout, /hello from 0G/);
-    assert.match(stdout, /event_id: evt_req_001/);
-    assert.match(stdout, /event_hash: sha256:/);
-    assert.match(stdout, /request_id: req_001/);
-    assert.match(stdout, /total_cost: 300 neuron/);
+    assert.match(stdout, /--- Relay task memory ---/);
+    assert.match(stdout, /Goal: Test goal via flag/);
+    assert.match(stdout, /Capsule: ctx_req_001/);
+    assert.match(stdout, /Router billing: 300 neuron/);
     assert.equal(stderr, "");
 
     const eventFile = await stat(join(projectRoot, ".relay", "events", "evt_req_001.json"));
     assert.equal(eventFile.isFile(), true);
-
-    assert.match(stdout, /capsule_id: ctx_req_001/);
     const capsuleFile = await stat(join(projectRoot, ".relay", "capsules", "ctx_req_001.json"));
     assert.equal(capsuleFile.isFile(), true);
   });
@@ -332,15 +331,55 @@ describe("Relay CLI", () => {
 
     const { stdout, stderr } = harness.output();
     assert.match(stdout, /Continuing from the capsule/);
-    assert.match(stdout, /Continued on: example\/model-b/);
-    assert.match(stdout, /Context mode: standard/);
-    assert.match(stdout, /Transcript-independent: yes/);
-    assert.match(stdout, /event_id: evt_req_switch_001/);
-    assert.match(stdout, /capsule_id: ctx_test_001/);
+    assert.match(stdout, /--- Relay task memory ---/);
+    assert.match(stdout, /Transcript replay avoided: yes/);
+    assert.match(stdout, /Capsule: ctx_test_001/);
+    assert.match(stdout, /Active model: example\/model-b/);
     assert.equal(stderr, "");
 
     const eventFile = await stat(join(projectRoot, ".relay", "events", "evt_req_switch_001.json"));
     assert.equal(eventFile.isFile(), true);
+  });
+
+  it("extends an active task with relay task step", async () => {
+    const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
+    const harness = createIo({
+      OG_INFERENCE_API_KEY: "sk-test"
+    }, projectRoot);
+    let calls = 0;
+    harness.io.fetch = async () => {
+      calls += 1;
+      return {
+        ok: true,
+        async json() {
+          return {
+            choices: [{ message: { content: calls === 1 ? "First step" : "Second step" } }],
+            x_0g_trace: {
+              request_id: `req_${calls}`,
+              provider: "0x0000000000000000000000000000000000000001",
+              billing: { total_cost: String(calls) }
+            }
+          };
+        }
+      };
+    };
+
+    await runCli([
+      "task",
+      "start",
+      "--model",
+      "example/model-a",
+      "--goal",
+      "Ship feature",
+      "--message",
+      "Start"
+    ], harness.io);
+    await runCli(["task", "step", "--message", "Continue on same task"], harness.io);
+
+    const { stdout } = harness.output();
+    assert.match(stdout, /Second step/);
+    assert.match(stdout, /Goal: Ship feature/);
+    assert.match(stdout, /Transcript replay avoided: yes/);
   });
 
   it("publishes a capsule through the CLI with mocked 0G Storage", async () => {
@@ -513,24 +552,24 @@ describe("Relay CLI", () => {
     );
   });
 
-  it("fails clearly when switch is missing --to", async () => {
+  it("fails clearly when task continue is missing --to", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
     const harness = createIo({ OG_INFERENCE_API_KEY: "sk-test" }, projectRoot);
     await saveCapsule(projectRoot, sampleCapsule());
 
     await assert.rejects(
-      () => runCli(["switch", "--mode", "standard"], harness.io),
+      () => runCli(["task", "continue", "--mode", "standard"], harness.io),
       /--to is required/
     );
   });
 
-  it("fails clearly when switch is missing an inference key", async () => {
+  it("fails clearly when task continue is missing an inference key", async () => {
     const projectRoot = await mkdtemp(join(tmpdir(), "relay-test-"));
     const harness = createIo({}, projectRoot);
     await saveCapsule(projectRoot, sampleCapsule());
 
     await assert.rejects(
-      () => runCli(["switch", "--to", "example/model-b", "--mode", "standard"], harness.io),
+      () => runCli(["task", "continue", "--to", "example/model-b", "--mode", "standard"], harness.io),
       /OG_INFERENCE_API_KEY/
     );
   });
