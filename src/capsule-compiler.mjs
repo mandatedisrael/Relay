@@ -1,4 +1,5 @@
 import { canonicalJson, sha256Digest } from "./hash.mjs";
+import { validateCapsule } from "./protocol.mjs";
 
 export function createInitialCapsule({ goal, event }) {
   const now = new Date().toISOString();
@@ -63,6 +64,77 @@ export function createInitialCapsule({ goal, event }) {
   };
 
   return capsule;
+}
+
+export function updateCapsuleFromEvent({ capsule, event }) {
+  if (!capsule || typeof capsule !== "object") {
+    throw new Error("An existing Context Capsule is required.");
+  }
+
+  if (!event || typeof event !== "object") {
+    throw new Error("A Relay event is required.");
+  }
+
+  if (!event.event_id) {
+    throw new Error("Event is missing event_id.");
+  }
+
+  const alreadyApplied = (capsule.evidence ?? []).some(
+    (item) => item.source_event === event.event_id
+  );
+  if (alreadyApplied) {
+    return capsule;
+  }
+
+  const updated = structuredClone(capsule);
+  const base = event.event_id.replace(/^evt_/, "");
+  const evId = `ev_${sanitizeForId(base)}`;
+  const factId = `fact_${sanitizeForId(base)}`;
+
+  const prompt = event.payload?.prompt ?? "";
+  const response = event.payload?.response ?? event.payload?.text ?? "";
+  const modelId = event.source?.model_id ?? event.trace?.model_id ?? updated.routing.last_model;
+  const provider = event.source?.provider ?? event.trace?.provider ?? null;
+  const requestId = event.source?.request_id ?? event.trace?.request_id ?? null;
+  const evidenceHash = event.content_hash ?? sha256Digest(canonicalJson({ prompt, response }));
+
+  updated.evidence.push({
+    id: evId,
+    kind: "model_output",
+    source_event: event.event_id,
+    hash: evidenceHash
+  });
+
+  if (response) {
+    updated.facts.push({
+      id: factId,
+      text: truncateForFact(response),
+      truth_state: "observed",
+      evidence: [evId]
+    });
+  }
+
+  const traceEntry = buildModelTrace(event.trace, modelId, provider, requestId);
+  if (traceEntry?.model_id && traceEntry.provider && traceEntry.request_id) {
+    updated.model_trace.push(traceEntry);
+  }
+
+  if (response) {
+    updated.state.next_action = modelId
+      ? `Review the latest step from ${modelId} and continue the task`
+      : "Review the latest model step and continue the task";
+  }
+
+  updated.routing.last_model = modelId;
+  updated.routing.recommended_next_step = "review";
+  updated.routing.recommended_mode = updated.routing.recommended_mode ?? "standard";
+
+  const validation = validateCapsule(updated);
+  if (!validation.ok) {
+    throw new Error(`Updated capsule failed validation: ${validation.errors.join("; ")}`);
+  }
+
+  return updated;
 }
 
 function buildModelTrace(trace, modelId, provider, requestId) {

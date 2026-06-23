@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createInitialCapsule } from "../src/capsule-compiler.mjs";
+import { createInitialCapsule, updateCapsuleFromEvent } from "../src/capsule-compiler.mjs";
 import { validateCapsule } from "../src/protocol.mjs";
 
 describe("Relay capsule compiler", () => {
@@ -39,6 +39,52 @@ describe("Relay capsule compiler", () => {
     assert.equal(capsule.evidence[0].source_event, event.event_id);
     assert.equal(capsule.model_trace[0].model_id, event.source.model_id);
     assert.equal(capsule.model_trace[0].request_id, event.trace.request_id);
+  });
+
+  it("updates an existing capsule with a new model step", () => {
+    const initialEvent = buildSampleEvent("First step");
+    const capsule = createInitialCapsule({ goal: "Fix checkout bug", event: initialEvent });
+    const followUpEvent = {
+      ...buildSampleEvent("Continue from capsule"),
+      event_id: "evt_sample_002",
+      source: {
+        ...buildSampleEvent().source,
+        model_id: "example/model-b",
+        request_id: "sample_002"
+      },
+      trace: {
+        ...buildSampleEvent().trace,
+        model_id: "example/model-b",
+        request_id: "sample_002"
+      },
+      payload: {
+        prompt: "Continue from capsule",
+        response: "I reviewed the capsule and recommend patching checkout/session.ts next."
+      },
+      content_hash: "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+    };
+
+    const updated = updateCapsuleFromEvent({ capsule, event: followUpEvent });
+    const validation = validateCapsule(updated);
+
+    assert.equal(validation.ok, true, `validation errors: ${validation.errors?.join(", ")}`);
+    assert.equal(updated.capsule_id, capsule.capsule_id);
+    assert.equal(updated.task.goal, "Fix checkout bug");
+    assert.equal(updated.evidence.length, 2);
+    assert.equal(updated.facts.length, 2);
+    assert.equal(updated.model_trace.length, 2);
+    assert.equal(updated.routing.last_model, "example/model-b");
+    assert.match(updated.state.next_action, /example\/model-b/);
+  });
+
+  it("does not duplicate capsule updates for the same event", () => {
+    const event = buildSampleEvent();
+    const capsule = createInitialCapsule({ goal: "Fix checkout bug", event });
+    const secondPass = updateCapsuleFromEvent({ capsule, event });
+
+    assert.equal(secondPass.evidence.length, capsule.evidence.length);
+    assert.equal(secondPass.facts.length, capsule.facts.length);
+    assert.equal(secondPass, capsule);
   });
 
   it("handles events without full trace gracefully", () => {

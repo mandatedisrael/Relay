@@ -1,12 +1,13 @@
 import { canonicalJson, sha256Digest } from "./hash.mjs";
 
-export function buildModelResponseEvent({ completion, prompt }) {
+export function buildModelResponseEvent({ completion, prompt, extraPayload = {} }) {
   const requestId = completion.trace.requestId ?? completion.id ?? `local_${Date.now()}`;
   const eventId = `evt_${sanitizeId(requestId)}`;
   const payload = {
     prompt,
     response: completion.content,
-    raw_response_id: completion.id
+    raw_response_id: completion.id,
+    ...extraPayload
   };
 
   return {
