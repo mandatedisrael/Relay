@@ -53,7 +53,7 @@ export function createInitialCapsule({ goal, event }) {
         hash: evidenceHash
       }
     ],
-    model_trace: traceEntry ? [traceEntry] : [],
+    model_trace: (traceEntry && traceEntry.model_id && traceEntry.provider && traceEntry.request_id) ? [traceEntry] : [],
     routing: {
       last_model: modelId,
       recommended_next_step: "review",
