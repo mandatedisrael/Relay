@@ -28,8 +28,8 @@ The MVP is complete when a developer can:
 - [ ] Use live 0G model catalog data; do not hardcode the model list as truth.
 - [ ] Record real `x_0g_trace` metadata from Router responses.
 - [ ] Respect model capability flags before using JSON mode, tools, or vision.
-- [ ] Keep API keys out of committed files.
-- [ ] Store local Relay runtime data under `.relay/`, which is ignored by git.
+- [x] Keep API keys out of committed files.
+- [x] Store local Relay runtime data under `.relay/`, which is ignored by git.
 - [ ] Never mark a model claim as verified unless Relay has evidence.
 - [ ] Show estimated token use before model switching.
 - [ ] Show actual Router billing after model calls when available.
@@ -40,23 +40,23 @@ The MVP is complete when a developer can:
 
 Create the local project skeleton and developer workflow.
 
-- [ ] Choose the package/runtime setup.
-  - Recommended: TypeScript CLI.
+- [x] Choose the package/runtime setup.
+  - Selected: dependency-light Node.js CLI with TypeScript-ready package boundaries.
   - Keep package boundaries simple for MVP.
-- [ ] Create CLI entrypoint.
-- [ ] Add formatting and linting.
-- [ ] Add test runner.
-- [ ] Add `README.md` usage examples for MVP commands.
-- [ ] Add `.env.example` with required variable names only.
-- [ ] Add local config loader.
-- [ ] Add safe error handling for missing credentials.
-- [ ] Add first smoke test for CLI startup.
+- [x] Create CLI entrypoint.
+- [ ] Add formatting and linting. Linting is in place; formatter is still pending.
+- [x] Add test runner.
+- [x] Add `README.md` usage examples for MVP commands.
+- [x] Add `.env.example` with required variable names only.
+- [x] Add local config loader.
+- [x] Add safe error handling for missing credentials.
+- [x] Add first smoke test for CLI startup.
 
 Done when:
 
-- [ ] `relay --help` runs locally.
-- [ ] Tests run locally.
-- [ ] No secret is required to run basic local tests.
+- [x] `relay --help` runs locally.
+- [x] Tests run locally.
+- [x] No secret is required to run basic local tests.
 
 ## Phase 2: Protocol and schemas
 
@@ -93,7 +93,7 @@ Done when:
 
 Build the local-first memory layer.
 
-- [ ] Create `.relay/` local data directory.
+- [x] Create `.relay/` local data directory.
 - [ ] Store events locally.
 - [ ] Store capsules locally.
 - [ ] Store context views locally.
@@ -349,4 +349,3 @@ Use this section to record completed milestones as the build advances.
 - [ ] Phase 10 complete:
 - [ ] Phase 11 complete:
 - [ ] Phase 12 complete:
-

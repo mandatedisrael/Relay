@@ -109,6 +109,25 @@ The goal is to avoid burning tokens on the full conversation when the next model
 
 The production design is documented in [architecture.md](./architecture.md).
 
+## Development
+
+Relay is currently scaffolded as a local Node.js CLI.
+
+Run the CLI:
+
+```sh
+npm start -- --help
+```
+
+Run local checks:
+
+```sh
+npm run lint
+npm test
+```
+
+Create a local `.env` from `.env.example` when you are ready to connect real 0G credentials. The scaffold does not require secrets for help, doctor, lint, or tests.
+
 ## Product principle
 
 Relay is not trying to make models magically share one brain.
