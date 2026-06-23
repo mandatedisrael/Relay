@@ -30,7 +30,7 @@ The MVP is complete when a developer can:
 - [ ] Respect model capability flags before using JSON mode, tools, or vision.
 - [x] Keep API keys out of committed files.
 - [x] Store local Relay runtime data under `.relay/`, which is ignored by git.
-- [ ] Never mark a model claim as verified unless Relay has evidence.
+- [x] Never mark a model claim as verified unless Relay has evidence.
 - [ ] Show estimated token use before model switching.
 - [ ] Show actual Router billing after model calls when available.
 - [ ] Publish encrypted capsules to 0G Storage by default.
@@ -62,32 +62,32 @@ Done when:
 
 Define the stable MVP data contracts before wiring more integrations.
 
-- [ ] Create `relay.event.v1` schema.
-- [ ] Create `relay.context.v1` schema.
-- [ ] Create `relay.view.v1` schema.
-- [ ] Define truth states:
-  - [ ] `observed`
-  - [ ] `verified`
-  - [ ] `claimed`
-  - [ ] `planned`
-  - [ ] `failed`
-  - [ ] `blocked`
-  - [ ] `stale`
-- [ ] Define model trace shape:
-  - [ ] model ID
-  - [ ] provider address
-  - [ ] request ID
-  - [ ] token usage
-  - [ ] billing
-  - [ ] `tee_verified`
-- [ ] Add schema validation utilities.
-- [ ] Add example fixtures for valid and invalid events/capsules.
+- [x] Create `relay.event.v1` schema.
+- [x] Create `relay.context.v1` schema.
+- [x] Create `relay.view.v1` schema.
+- [x] Define truth states:
+  - [x] `observed`
+  - [x] `verified`
+  - [x] `claimed`
+  - [x] `planned`
+  - [x] `failed`
+  - [x] `blocked`
+  - [x] `stale`
+- [x] Define model trace shape:
+  - [x] model ID
+  - [x] provider address
+  - [x] request ID
+  - [x] token usage
+  - [x] billing
+  - [x] `tee_verified`
+- [x] Add schema validation utilities.
+- [x] Add example fixtures for valid and invalid events/capsules.
 
 Done when:
 
-- [ ] Valid fixtures pass validation.
-- [ ] Invalid fixtures fail with human-readable errors.
-- [ ] Capsule validation rejects missing evidence for `verified` facts.
+- [x] Valid fixtures pass validation.
+- [x] Invalid fixtures fail with human-readable errors.
+- [x] Capsule validation rejects missing evidence for `verified` facts.
 
 ## Phase 3: Local capsule store
 
@@ -338,7 +338,7 @@ After that, build the first real 0G model call and event capture.
 Use this section to record completed milestones as the build advances.
 
 - [ ] Phase 1 complete:
-- [ ] Phase 2 complete:
+- [x] Phase 2 complete: protocol schemas, fixtures, validation utilities, and evidence checks are implemented and tested.
 - [ ] Phase 3 complete:
 - [ ] Phase 4 complete:
 - [ ] Phase 5 complete:
